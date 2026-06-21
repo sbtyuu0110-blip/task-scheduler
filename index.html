@@ -10,9 +10,12 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="差込スケジューラ">
 <meta name="format-detection" content="telephone=no">
-<meta name="theme-color" content="#4f46e5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0e1014" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%234f46e5'/%3E%3Cpath d='M9 22V10l7 6 7-6v12' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<!-- ファビコン（data URI: file:// でも有効）。ホーム画面アイコン/PWA は https 配信時のみ有効 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236366f1'/%3E%3Cstop offset='1' stop-color='%238b5cf6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='8' fill='url(%23g)'/%3E%3Cpath d='M9 17l5 5 9-10' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
 /* ===== デザイントークン ===== */
 :root{
@@ -50,7 +53,9 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important} /* class の display 指定に勝たせる */
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;width:100%}
+/* 横スクロール禁止: html のみに当てる（body だと appbar の sticky を壊す）。clip 非対応は hidden にフォールバック */
+html{overflow-x:hidden;overflow-x:clip;overscroll-behavior-x:none}
 body{font-family:var(--ff);font-size:var(--fs-14);color:var(--text);background:var(--bg);line-height:1.5;-webkit-font-smoothing:antialiased}
 .tnum{font-variant-numeric:tabular-nums}
 button{font-family:inherit;font-size:var(--fs-14);cursor:pointer}
@@ -123,6 +128,7 @@ h1,h2,h3{margin:0;font-weight:650}
 
 /* ===== Task list ===== */
 .list{list-style:none;margin:0;padding:8px}
+.list-divider{list-style:none;margin:14px 6px 2px;padding-top:8px;font-size:var(--fs-12);color:var(--text-faint);font-weight:600;border-top:1px dashed var(--border)}
 .card{display:grid;grid-template-columns:74px 1fr auto;gap:12px;align-items:center;
   padding:12px;margin:6px 4px;border:1px solid var(--border);border-left:4px solid var(--border);
   border-radius:var(--r-md);background:var(--surface);transition:box-shadow .15s,border-color .15s,background .3s}
@@ -144,13 +150,16 @@ h1,h2,h3{margin:0;font-weight:650}
 .dots.p-high i{background:var(--text)} .dots.p-medium i:nth-child(-n+2){background:var(--text-muted)}
 .dots.p-low i:first-child{background:var(--text-muted)}
 .tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;border:1px solid var(--border)}
-.tag.insert{color:var(--accent);border-color:var(--accent);background:var(--accent-weak)}
 .tag.bad{color:var(--danger);background:var(--danger-bg);border-color:var(--danger-border)}
 .tag.warn{color:var(--warning);background:var(--warning-bg);border-color:var(--warning-border)}
 .tag.over{color:var(--warning);border-color:var(--warning-border)}
 .tag.unsched{color:var(--text-muted)}
-.tag.urg{color:var(--text-muted)}
-.tag.urg.u-now{color:var(--accent);border-color:var(--accent);background:var(--accent-weak)}
+.tag.lead{color:var(--text-muted);font-variant-numeric:tabular-nums}
+.card-note{grid-column:2/-1;margin-top:6px;font-size:var(--fs-12);color:var(--text-muted);line-height:1.45;
+  white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card-note.expanded{-webkit-line-clamp:unset}
+.card-sub{grid-column:2/-1;margin-top:2px;font-size:11px;color:var(--text-faint)}
 .timer{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:700}
 .progress{grid-column:2/3;height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden;margin-top:6px}
 .progress>div{height:100%;background:var(--accent);width:0}
@@ -175,22 +184,22 @@ h1,h2,h3{margin:0;font-weight:650}
 .sidebar{display:flex;flex-direction:column;gap:16px}
 .field{margin-bottom:10px}
 .field label{display:block;font-size:var(--fs-12);font-weight:600;color:var(--text-muted);margin-bottom:4px}
-.field input,.field select{width:100%;height:38px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);
+.field input,.field select,.field textarea{width:100%;min-width:0;padding:0 10px;border:1px solid var(--border);border-radius:var(--r-sm);
   background:var(--surface);color:var(--text);font-size:var(--fs-14)}
+.field input,.field select{height:38px}
+.field textarea{padding:8px 10px;resize:vertical;line-height:1.5;font-family:inherit}
 .field .err{color:var(--danger);font-size:var(--fs-12);margin-top:4px;display:none}
 .field.invalid .err{display:block}
 .field.invalid input,.field.invalid select{border-color:var(--danger)}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ddl-row{grid-template-columns:1.5fr 1fr}
+.hint{display:flex;gap:6px;align-items:flex-start;margin-top:6px;padding:6px 9px;border-radius:var(--r-sm);
+  background:var(--accent-weak);color:var(--accent);font-size:var(--fs-12);line-height:1.45}
+.subhint{margin-top:6px;font-size:var(--fs-12);color:var(--text-faint);line-height:1.45}
 .seg{display:flex;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px;gap:3px;margin-bottom:10px}
-.seg button{flex:1;height:32px;border:0;background:transparent;border-radius:6px;color:var(--text-muted);font-weight:600}
+.seg button{flex:1;height:32px;border:0;background:transparent;border-radius:6px;color:var(--text-muted);font-weight:600;cursor:pointer}
 .seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
-.seg button.on.insert{color:var(--accent)}
 .form-body{padding:14px 16px}
-.cta-insert{display:flex;align-items:center;gap:8px;width:100%;justify-content:center;height:44px;margin-bottom:12px;
-  border-radius:var(--r-md);border:1px dashed var(--accent);background:var(--accent-weak);color:var(--accent);font-weight:700}
-.cta-insert:hover{background:var(--accent);color:var(--accent-fg)}
-.check{display:flex;align-items:center;gap:8px;margin:2px 0 12px;font-size:var(--fs-14);color:var(--text-muted);cursor:pointer;user-select:none}
-.check input{width:16px;height:16px;accent-color:var(--accent);margin:0}
 .accuracy .form-body div{display:flex;justify-content:space-between;padding:3px 0}
 .accuracy b{font-variant-numeric:tabular-nums}
 
@@ -204,6 +213,8 @@ h1,h2,h3{margin:0;font-weight:650}
 .drawer .dhead h2{font-size:var(--fs-16);flex:1}
 .drawer .dbody{padding:16px}
 .breakrow{display:grid;grid-template-columns:1fr 1fr 34px;gap:8px;align-items:center;margin-bottom:8px}
+.rulerow{display:grid;grid-template-columns:1fr 64px auto 34px;gap:8px;align-items:center;margin-bottom:8px}
+.rulecnt{font-size:11px;color:var(--text-faint);white-space:nowrap}
 .daypick{display:flex;gap:4px;flex-wrap:wrap}
 .daypick label{display:inline-flex;align-items:center;justify-content:center;width:38px;height:34px;border:1px solid var(--border);
   border-radius:var(--r-sm);cursor:pointer;font-size:var(--fs-12);user-select:none}
@@ -246,6 +257,7 @@ h1,h2,h3{margin:0;font-weight:650}
 .cal-chip.ok{border-left-color:var(--success)} .cal-chip.warn{border-left-color:var(--warning)}
 .cal-chip.bad{border-left-color:var(--danger)}
 .cal-chip.ddl{border-left-color:var(--danger);color:var(--danger);font-weight:600;background:var(--danger-bg)}
+.cal-chip.ghost{border-left-color:var(--text-faint);color:var(--text-faint);background:transparent}
 .cal-chip.done{color:var(--text-faint);text-decoration:line-through}
 .cal-more{font-size:10px;color:var(--text-muted);padding-left:3px}
 .cal-legend{display:flex;flex-wrap:wrap;gap:12px;padding:10px 14px;border-top:1px solid var(--border);font-size:var(--fs-12);color:var(--text-muted)}
@@ -261,6 +273,7 @@ h1,h2,h3{margin:0;font-weight:650}
 .cal-detail .di .badge.bad{color:var(--danger);border-color:var(--danger-border);background:var(--danger-bg)}
 .cal-detail .di .badge.warn{color:var(--warning);border-color:var(--warning-border);background:var(--warning-bg)}
 .cal-detail .di .badge.ddl{color:var(--danger);border-color:var(--danger-border)}
+.cal-detail .di .badge.due{color:var(--text-faint)}
 .cal-detail .di .badge.done{color:var(--text-faint)}
 .cal-detail .di .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
@@ -273,15 +286,17 @@ h1,h2,h3{margin:0;font-weight:650}
   .card .time{text-align:left}
   .card .actions{grid-column:1/3;justify-content:flex-end;margin-top:2px}
   .btn.sm{height:40px} .btn.ghost.sm{min-width:44px}
-  .seg button{height:38px} .check input{width:20px;height:20px}
-  .appbar .logo{font-size:var(--fs-14)} .appbar{gap:8px}
-  .iconbtn{min-width:38px;padding:0 10px}
+  .seg button{height:38px}
+  .appbar{gap:8px}
+  .appbar .logo{font-size:var(--fs-14);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .appbar .clock{display:none} /* 狭幅では時計を隠して横はみ出しを防止 */
+  .iconbtn{min-width:38px;padding:0 10px;flex:none}
   /* カレンダー: 狭幅では予定をドット表示に */
   .cal-grid{gap:4px;padding:6px} .cal-grid-head{gap:4px;padding:8px 6px 0}
   .cal-cell{min-height:58px;padding:3px}
   .cal-chip{font-size:0;height:5px;padding:0;border-left:0;border-radius:3px;background:var(--text-faint)}
   .cal-chip.ok{background:var(--success)} .cal-chip.warn{background:var(--warning)}
-  .cal-chip.bad,.cal-chip.ddl{background:var(--danger)} .cal-chip.done{background:var(--border)}
+  .cal-chip.bad,.cal-chip.ddl{background:var(--danger)} .cal-chip.done,.cal-chip.ghost{background:var(--border)}
   .cal-more{font-size:9px}
 }
 </style>
@@ -359,7 +374,6 @@ h1,h2,h3{margin:0;font-weight:650}
         <div class="panel-head"><h2 id="formTitle">タスクを追加</h2><span class="spacer"></span>
           <button class="btn ghost sm" id="btnCancelEdit" hidden>キャンセル</button></div>
         <div class="form-body">
-          <button class="cta-insert" id="ctaInsert" title="差し込み (I キー)">⚡ 差し込みを追加</button>
           <form id="taskForm" novalidate>
             <div class="field" id="fName"><label for="iName">タスク名</label>
               <input id="iName" type="text" maxlength="120" placeholder="例: 見積書の作成" autocomplete="off">
@@ -371,16 +385,16 @@ h1,h2,h3{margin:0;font-weight:650}
               <div class="field"><label for="iPrio">優先度</label>
                 <select id="iPrio"><option value="high">高</option><option value="medium" selected>中</option><option value="low">低</option></select></div>
             </div>
-            <div class="field"><label>期限の決め方</label>
-              <div class="seg" id="dueSeg" role="tablist" aria-label="期限の決め方">
-                <button type="button" data-due="deadline" class="on">締切日時</button>
-                <button type="button" data-due="urgency">緊急度で</button>
-              </div></div>
-            <div class="field" id="fDdl"><label for="iDdl">締切日時</label>
-              <input id="iDdl" type="datetime-local"></div>
-            <div class="field" id="fUrg" hidden><label for="iUrg">緊急度（締切なし時の優先処理）</label>
-              <select id="iUrg"><option value="high" selected>今すぐ（最優先で割り込み）</option><option value="medium">今日中</option><option value="low">急がない</option></select></div>
-            <label class="check" id="lInterrupt"><input type="checkbox" id="iInterrupt"><span>差し込み（突発）として記録</span></label>
+            <div class="field" id="fDdl"><label for="iDdlDate">締切（任意）</label>
+              <div class="row2 ddl-row">
+                <input id="iDdlDate" type="date" aria-label="締切の日付">
+                <input id="iDdlTime" type="time" aria-label="締切の時刻">
+              </div>
+              <div class="hint" id="leadHint" role="status" aria-live="polite" hidden></div>
+              <div class="subhint">未入力でもOK（締切なしは一覧のいちばん下）。締切が早い順に自動で並びます。</div>
+            </div>
+            <div class="field"><label for="iNote">メモ（任意）</label>
+              <textarea id="iNote" maxlength="1000" rows="2" placeholder="補足やメモ"></textarea></div>
             <button class="btn primary block" type="submit" id="btnSubmit">追加する</button>
           </form>
         </div>
@@ -411,6 +425,13 @@ h1,h2,h3{margin:0;font-weight:650}
     <div class="field"><label>稼働曜日</label>
       <div class="daypick" id="workDays"></div>
       <div class="err" id="daysErr" style="display:none">少なくとも1日を選択してください</div></div>
+    <div class="field" id="sfDefTime"><label for="sDefTime">締切のデフォルト時刻</label><input id="sDefTime" type="time">
+      <div class="err">時刻を入力してください</div></div>
+    <div class="field"><label>締切ルール（キーワード → 納期の◯日前を締切に）</label>
+      <div id="leadRules"></div>
+      <button class="btn sm" id="btnAddRule" type="button">＋ ルールを追加</button>
+      <div class="err" id="ruleErr" style="display:none">キーワードと0以上の日数を入力してください</div>
+      <div class="subhint">タスク名にキーワードを含むと、納期の◯カレンダー日前が締切になります（複数一致は最も前倒し）。</div></div>
     <button class="btn primary block" id="btnSaveSettings" type="button">設定を保存</button>
   </div>
 </aside>
@@ -431,9 +452,8 @@ h1,h2,h3{margin:0;font-weight:650}
  * ========================================================================= */
 const MIN = 60000;
 const KEY = 'insertion-scheduler';
-const SCHEMA = 2;
+const SCHEMA = 3;
 const PRIO = {high:0, medium:1, low:2};
-const URG  = {high:0, medium:1, low:2};
 
 /* ---------- 時刻ヘルパー（壁時計） ---------- */
 function parseDateTime(s){ // 'YYYY-MM-DDTHH:mm' -> ローカルDate
@@ -453,6 +473,22 @@ function fmtHM(d){ const p=n=>String(n).padStart(2,'0'); return `${p(d.getHours(
 function fmtClock(d){ const w='日月火水木金土'[d.getDay()];
   return `${d.getMonth()+1}/${d.getDate()}(${w}) ${fmtHM(d)}`; }
 function hmToMin(hm){ return hm.h*60+hm.m; }
+
+/* ---------- 締切リードルール（キーワード→納期の○日前） ---------- */
+function leadDaysFor(task, st){ // 名前がキーワードを含む規則の最大日数（最も前倒し＝安全側）
+  const nm=task.name||''; let mx=0;
+  for(const r of (st.leadRules||[])){ if(!r.keyword) continue; if(nm.includes(r.keyword)) mx=Math.max(mx, r.days||0); }
+  return mx;
+}
+function leadRuleFor(task, st){ // 適用された規則（最大日数のもの）。ヒント/表示用
+  const nm=task.name||''; let best=null;
+  for(const r of (st.leadRules||[])){ if(!r.keyword) continue; if(nm.includes(r.keyword) && (!best || (r.days||0)>best.days)) best={keyword:r.keyword, days:r.days||0}; }
+  return best;
+}
+function effectiveDeadline(task, st){ // 実効締切 = 納期 − leadDays（カレンダー日・時刻維持）
+  const d=parseDateTime(task.deadline); if(!d) return null;
+  const ld=leadDaysFor(task, st); return ld>0 ? addDays(d, -ld) : d;
+}
 
 /* ---------- 実績（派生値） ---------- */
 function actualMin(task){ // 閉じたセッションのみ
@@ -514,25 +550,23 @@ function computeSchedule(tasks, st, now){
   const rest  = active.filter(t=>t!==doing);
   const hardLimit = now.getTime() + 365*1440*MIN;
   const endOfToday = atTime(now, parseHM(st.workdayEnd));
-  // 実効締切: 締切があればそれを使う。締切なしは緊急度を締切へ写像（種別非依存）。今すぐ→先頭/今日中→本日終業/急がない→末尾。
-  const effDl = t => { const d=parseDateTime(t.deadline); if(d) return d;
-    if(t.urgency==='high') return now; if(t.urgency==='medium') return endOfToday;
-    return null; };
+  // 実効締切（純EDD・締切のみ）。タスクごとに一度だけ算出して束ねる（engine/flag で同一値を参照）。
+  const _effMap = new Map();
+  const effOf = t => { if(!_effMap.has(t)) _effMap.set(t, effectiveDeadline(t, st)); return _effMap.get(t); };
   const cmp=(a,b)=>{
-    const ad=effDl(a), bd=effDl(b);
+    const ad=effOf(a), bd=effOf(b);
     if(ad&&bd){ if(ad.getTime()!==bd.getTime()) return ad-bd; }
-    else if(ad&&!bd) return -1; else if(!ad&&bd) return 1;
+    else if(ad&&!bd) return -1; else if(!ad&&bd) return 1;   // 締切なしは末尾
     if(PRIO[a.priority]!==PRIO[b.priority]) return PRIO[a.priority]-PRIO[b.priority];
-    const au=URG[a.urgency]??3, bu=URG[b.urgency]??3; if(au!==bu) return au-bu;
     return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
   };
-  const isOverdue=t=>{ const d=parseDateTime(t.deadline); return d && d.getTime()<now.getTime(); };
+  const isOverdue=t=>{ const d=effOf(t); return d && d.getTime()<now.getTime(); };
   const overdue = rest.filter(isOverdue).sort(cmp);
   const upcoming= rest.filter(t=>!isOverdue(t)).sort(cmp);
   const remOf = t => Math.max(t.estimateMin - actualMin(t), 0);
 
   const annotate = (task, segments, start, end, unsched)=>{
-    const dl=parseDateTime(task.deadline);
+    const dl=effOf(task);
     return { task, segments, scheduledStart:start, scheduledEnd:end,
       unschedulable: !!unsched,
       willMissDeadline: !unsched && !!dl && end.getTime()>dl.getTime(),
@@ -562,10 +596,10 @@ function computeSchedule(tasks, st, now){
   let missCount=0,notTodayCount=0,onTimeCount=0,noDeadlineCount=0,unschedulableCount=0;
   for(const r of items){
     if(r.unschedulable){ unschedulableCount++; continue; }
-    if(!r.task.deadline) noDeadlineCount++;            // 情報（他と重複し得る）
-    if(r.willMissDeadline) missCount++;                 // 以下は分割集計
-    else if(r.notFinishToday) notTodayCount++;          // 締切なしの本日未完も含む
-    else onTimeCount++;                                 // 本日完了・締切内
+    if(!r.task.deadline){ noDeadlineCount++; continue; } // 締切なしは「締切なし」のみに計上
+    if(r.willMissDeadline) missCount++;
+    else if(r.notFinishToday) notTodayCount++;
+    else onTimeCount++;
   }
   return {items, agg:{missCount,notTodayCount,onTimeCount,noDeadlineCount,unschedulableCount,total:items.length}};
 }
@@ -574,7 +608,8 @@ function computeSchedule(tasks, st, now){
  * 状態・永続化
  * ===================================================================== */
 function defaultSettings(){ return {workdayStart:'09:00',workdayEnd:'18:00',
-  breaks:[{start:'12:00',end:'13:00'}], workDays:[1,2,3,4,5], theme:'system'}; }
+  breaks:[{start:'12:00',end:'13:00'}], workDays:[1,2,3,4,5], theme:'system',
+  defaultDeadlineTime:'18:00', leadRules:[]}; }
 let state = { tasks:[], settings:defaultSettings() };
 
 function uuid(){
@@ -588,16 +623,18 @@ function uuid(){
 function migrate(data){ // schemaVersion 昇順に変換
   if(!data || typeof data!=='object') return null;
   let v = data.schemaVersion||1;
-  if(v<2){ // v1→v2: type を廃止し interrupt(突発フラグ) へ。緊急度は保持。
-    if(Array.isArray(data.tasks)) data.tasks.forEach(t=>{
-      if(t && typeof t==='object'){ if(t.interrupt===undefined) t.interrupt = (t.type==='insertion'); delete t.type; }
-    });
+  if(v<2){ // v1→v2: 旧 type を廃止
+    if(Array.isArray(data.tasks)) data.tasks.forEach(t=>{ if(t&&typeof t==='object') delete t.type; });
     v=2;
+  }
+  if(v<3){ // v2→v3: 差し込み/緊急度を撤去（純EDD化）。sanitizeでも拾わないが念のため削除
+    if(Array.isArray(data.tasks)) data.tasks.forEach(t=>{ if(t&&typeof t==='object'){ delete t.interrupt; delete t.urgency; } });
+    v=3;
   }
   data.schemaVersion = SCHEMA;
   return data;
 }
-const ENUM_PRIO=['high','medium','low'], ENUM_URG=['high','medium','low'], ENUM_STATUS=['todo','doing','done'];
+const ENUM_PRIO=['high','medium','low'], ENUM_STATUS=['todo','doing','done'];
 function sanitizeTask(t){
   if(!t||typeof t!=='object') return null;
   const name=String(t.name??'').slice(0,200); if(!name) return null;
@@ -607,8 +644,7 @@ function sanitizeTask(t){
     name, estimateMin: Math.round(est),
     deadline: (typeof t.deadline==='string'&&parseDateTime(t.deadline))? t.deadline : null,
     priority: ENUM_PRIO.includes(t.priority)? t.priority : 'medium',
-    interrupt: (t.interrupt!==undefined ? !!t.interrupt : t.type==='insertion'), // 突発フラグ（旧typeから後方互換）
-    urgency: ENUM_URG.includes(t.urgency)? t.urgency : null,
+    note: typeof t.note==='string'? t.note.slice(0,1000) : '',  // メモ（旧 urgency/interrupt は無視）
     status: ENUM_STATUS.includes(t.status)? t.status : 'todo',
     sessions: Array.isArray(t.sessions)? t.sessions.filter(s=>s&&typeof s.start==='number').map(s=>({start:s.start,end:(typeof s.end==='number'?s.end:null)})) : [],
     completedAt: typeof t.completedAt==='string'? t.completedAt : null,
@@ -625,6 +661,10 @@ function sanitizeSettings(s){
     breaks: Array.isArray(s.breaks)? s.breaks.filter(b=>b&&valHM(b.start)&&valHM(b.end)).map(b=>({start:b.start,end:b.end})) : d.breaks,
     workDays: Array.isArray(s.workDays)? s.workDays.filter(n=>Number.isInteger(n)&&n>=0&&n<=6) : d.workDays,
     theme: ['system','light','dark'].includes(s.theme)? s.theme : 'system',
+    defaultDeadlineTime: valHM(s.defaultDeadlineTime)? s.defaultDeadlineTime : d.defaultDeadlineTime,
+    leadRules: Array.isArray(s.leadRules)? s.leadRules
+      .filter(r=>r&&typeof r.keyword==='string'&&r.keyword.trim()&&isFinite(r.days))
+      .map(r=>({keyword:r.keyword.trim().slice(0,40), days:Math.max(0,Math.min(365,Math.round(r.days)))})) : [],
   };
 }
 function validateImport(json){
@@ -783,17 +823,19 @@ function buildCard(){
   const body=el('div','body');
   const name=el('div','name');
   const meta=el('div','meta');
-  const deadline=el('span','ddl-txt'); const urg=el('span','tag urg'); urg.hidden=true;
+  const deadline=el('span','ddl-txt');
   const dots=el('span','dots'); dots.innerHTML='<i></i><i></i><i></i>';
-  const tagInsert=el('span','tag insert'); tagInsert.textContent='⚡ 差し込み';
+  const lead=el('span','tag lead'); lead.hidden=true;
   const tagState=el('span','tag');
   const timer=el('span','timer'); timer.hidden=true;
-  meta.append(deadline,urg,dots,tagInsert,tagState,timer);
+  meta.append(deadline,dots,lead,tagState,timer);
   body.append(name,meta);
-  const prog=el('div','progress'); const bar=el('div'); prog.append(bar); prog.hidden=true;
   const actions=el('div','actions');
-  li.append(time,body,actions,prog);
-  li._r={range,dur,name,deadline,urg,dots,tagInsert,tagState,timer,prog,bar,actions};
+  const sub=el('div','card-sub'); sub.hidden=true;
+  const note=el('div','card-note'); note.hidden=true;
+  const prog=el('div','progress'); const bar=el('div'); prog.append(bar); prog.hidden=true;
+  li.append(time,body,actions,sub,note,prog);
+  li._r={range,dur,name,deadline,dots,lead,tagState,timer,sub,note,prog,bar,actions};
   return li;
 }
 function updateCard(li, it, now){
@@ -809,19 +851,22 @@ function updateCard(li, it, now){
     if(!startToday){ const s=it.scheduledStart; r.dur.textContent = `${s.getMonth()+1}/${s.getDate()}`+(spans?'〜':''); }
     else r.dur.textContent = spans? `${t.estimateMin}分・翌日へ` : `${t.estimateMin}分`; }
   r.name.textContent=t.name;
-  // 締切 or 緊急度（締切なし時に並び順の理由を提示）
-  const URGLBL={high:'今すぐ',medium:'今日中',low:'急がない'};
-  if(t.deadline){ const dl=parseDateTime(t.deadline);
-    r.deadline.textContent='締切 '+relDeadline(dl,now); r.deadline.title=fmtClock(dl); r.deadline.hidden=false;
-    r.deadline.setAttribute('aria-label','締切 '+fmtClock(dl)); r.urg.hidden=true;
-  } else { r.deadline.hidden=true;
-    if(t.urgency){ r.urg.hidden=false; r.urg.className='tag urg'+(t.urgency==='high'?' u-now':''); r.urg.textContent='緊急度: '+URGLBL[t.urgency]; }
-    else r.urg.hidden=true;
-  }
+  // 締切（実効）。リード規則適用時は納期を併記
+  const eff = effectiveDeadline(t, state.settings);
+  const ld  = leadDaysFor(t, state.settings);
+  if(eff){
+    r.deadline.textContent='締切 '+relDeadline(eff,now);
+    const due = parseDateTime(t.deadline);
+    r.deadline.title = ld>0 ? `締切(実効) ${fmtClock(eff)} ／ 納期 ${fmtClock(due)}（${ld}日前倒し）` : fmtClock(eff);
+    r.deadline.hidden=false; r.deadline.setAttribute('aria-label','締切 '+fmtClock(eff));
+  } else r.deadline.hidden=true;
+  // リードバッジ＋納期サブ（濃淡のみ・色相は足さない）
+  if(eff && ld>0){ const rule=leadRuleFor(t, state.settings); const due=parseDateTime(t.deadline);
+    r.lead.hidden=false; r.lead.textContent=`⏱ −${ld}d${rule?'（'+rule.keyword+'）':''}`;
+    r.sub.hidden=false; r.sub.textContent=`納期 ${due.getMonth()+1}/${due.getDate()} ・${ld}日前倒し`;
+  } else { r.lead.hidden=true; r.sub.hidden=true; }
   // 優先度ドット
   r.dots.className='dots p-'+t.priority; r.dots.title='優先度: '+({high:'高',medium:'中',low:'低'}[t.priority]);
-  // 差し込み（突発）マーカー — interrupt フラグに追従。スケジュールには影響しない
-  r.tagInsert.hidden = !t.interrupt;
   // 状態タグ
   let stateTag='';
   if(it.unschedulable){ r.tagState.className='tag unsched'; stateTag='✕ 配置不能'; }
@@ -830,6 +875,9 @@ function updateCard(li, it, now){
   else stateTag='';
   if(it.overEstimate){ r.tagState.className='tag over'; stateTag=(stateTag?stateTag+' / ':'')+'見積超過'; }
   r.tagState.hidden=!stateTag; r.tagState.textContent=stateTag;
+  // メモ（内容の下・3行clamp・クリックで展開）
+  if(t.note){ r.note.hidden=false; r.note.textContent=t.note; r.note.title=t.note; }
+  else { r.note.hidden=true; r.note.classList.remove('expanded'); }
   // タイマー/進捗（doing）
   if(t.status==='doing'){ r.timer.hidden=false; r.prog.hidden=false;
     updateTimerNode(li, t);
@@ -857,6 +905,7 @@ function updateTimerNode(li, t){
 function renderList(items, now, animate){
   const list=$('#list'), empty=$('#empty');
   empty.hidden = items.length>0;
+  const oldDiv=list.querySelector('.list-divider'); if(oldDiv) oldDiv.remove();
   // FLIP: 既存位置を記録
   if(animate && !reduceMotion){ prevRects.clear();
     list.querySelectorAll('.card').forEach(c=>prevRects.set(c.dataset.id, c.getBoundingClientRect())); }
@@ -871,6 +920,10 @@ function renderList(items, now, animate){
     seen.add(it.task.id);
   });
   existing.forEach((li,id)=>{ if(!seen.has(id)) li.remove(); });
+  // 締切なしセクション見出し（締切ありと混在する時のみ）
+  const firstNoDl=items.findIndex(it=>!it.task.deadline);
+  if(firstNoDl>0){ const div=el('li','list-divider'); div.textContent=`締切なし ${items.length-firstNoDl}件`;
+    const card=list.querySelector(`.card[data-id="${cssEsc(items[firstNoDl].task.id)}"]`); if(card) list.insertBefore(div, card); }
   // FLIP 実行 ＋ 悪化フラッシュ（ユーザー操作時のみ）
   if(animate && !reduceMotion){
     list.querySelectorAll('.card').forEach(c=>{
@@ -923,8 +976,8 @@ function renderTimeline(items, now){
     });
     if(!drewToday && it.scheduledStart.getTime()>=dayEnd.getTime()) overflow++;
   });
-  // 締切マーカー（本日内）
-  items.forEach(it=>{ const dl=parseDateTime(it.task.deadline); if(!dl) return;
+  // 締切マーカー（本日内）— 実効締切ベース
+  items.forEach(it=>{ const dl=effectiveDeadline(it.task, state.settings); if(!dl) return;
     if(dl.toDateString()===now.toDateString() && dl.getTime()>=dayStart.getTime() && dl.getTime()<=dayEnd.getTime()){
       const m=el('div','ddl'); m.style.left=pX(dl)+'%'; m.textContent='▽'; m.title='締切 '+it.task.name; tl.append(m); } });
   // now ライン
@@ -967,14 +1020,18 @@ function setView(view){
 }
 // computeScheduleの結果(items)とtasksから 日付キー→{sched,ddl,done} を構築
 function buildCalendarData(items, tasks){
+  const st=state.settings;
   const map=new Map();
-  const get=k=>{ let v=map.get(k); if(!v){ v={sched:[],ddl:[],done:[]}; map.set(k,v);} return v; };
+  const get=k=>{ let v=map.get(k); if(!v){ v={sched:[],ddl:[],due:[],done:[]}; map.set(k,v);} return v; };
   for(const it of items){ if(it.unschedulable) continue;
     const risk = it.willMissDeadline?'bad':it.notFinishToday?'warn':'ok';
     const days=new Set(); it.segments.forEach(s=>days.add(dayKey(s.start)));
     days.forEach(k=>get(k).sched.push({task:it.task, risk}));
   }
-  for(const t of tasks){ const d=parseDateTime(t.deadline); if(d) get(dayKey(d)).ddl.push(t); }
+  for(const t of tasks){ const eff=effectiveDeadline(t, st); if(!eff) continue;
+    get(dayKey(eff)).ddl.push(t);                                   // 実効締切＝⚑
+    const ld=leadDaysFor(t, st); if(ld>0){ const due=parseDateTime(t.deadline); if(due) get(dayKey(due)).due.push(t); } // 納期ゴースト
+  }
   for(const t of tasks){ if(t.status==='done'&&t.completedAt){ const d=new Date(t.completedAt); if(!isNaN(d)) get(dayKey(d)).done.push(t); } }
   return map;
 }
@@ -998,6 +1055,7 @@ function renderCalendar(items, now){
       const chips=[];
       day.ddl.forEach(t=>chips.push({cls:'ddl',label:'⚑ '+t.name}));
       day.sched.forEach(s=>chips.push({cls:s.risk,label:s.task.name}));
+      day.due.forEach(t=>chips.push({cls:'ghost',label:'⚐ '+t.name}));
       day.done.forEach(t=>chips.push({cls:'done',label:'✓ '+t.name}));
       chips.slice(0,cap).forEach(c=>{ const ch=el('div','cal-chip '+c.cls); ch.textContent=c.label; ch.title=c.label; cell.append(ch); });
       if(chips.length>cap){ const m=el('div','cal-more'); m.textContent=`+${chips.length-cap}件`; cell.append(m); }
@@ -1016,6 +1074,7 @@ function renderCalDetail(data){
   if(day){
     day.ddl.forEach(t=>rows.push({b:'ddl',bt:'⚑ 締切',n:t.name}));
     day.sched.forEach(s=>rows.push({b:s.risk,bt:s.risk==='bad'?'締切超過予定':s.risk==='warn'?'今日中に終わらない':'作業予定',n:s.task.name}));
+    day.due.forEach(t=>rows.push({b:'due',bt:'⚐ 納期',n:t.name}));
     day.done.forEach(t=>rows.push({b:'done',bt:'✓ 完了',n:t.name}));
   }
   if(!rows.length){ const e=el('div','muted'); e.textContent='この日の予定はありません。'; box.append(e); return; }
@@ -1045,21 +1104,32 @@ function confirmDialog(title, body, okLabel){
 /* =====================================================================
  * フォーム / イベント
  * ===================================================================== */
-let dueMode='deadline', editingId=null; // 期限の決め方: 'deadline' | 'urgency'
-function setDueMode(mode){ dueMode=mode;
-  document.querySelectorAll('#dueSeg button').forEach(b=>b.classList.toggle('on', b.dataset.due===mode));
-  $('#fDdl').hidden = mode!=='deadline';
-  $('#fUrg').hidden = mode!=='urgency';
+let editingId=null;
+// 締切は「日付が真実の源」。日付なし→null（時刻無視）、日付あり・時刻空→既定時刻で補完。
+function buildDeadline(){ const d=$('#iDdlDate').value; if(!d) return null;
+  const t=$('#iDdlTime').value || state.settings.defaultDeadlineTime || '18:00'; return `${d}T${t}`; }
+function fillDefaultTimeIfEmpty(highlight){ if($('#iDdlDate').value && !$('#iDdlTime').value){
+  $('#iDdlTime').value = state.settings.defaultDeadlineTime || '18:00';
+  if(highlight && !reduceMotion){ const el2=$('#iDdlTime'); el2.style.background='var(--accent-weak)';
+    setTimeout(()=>{ el2.style.transition='background .4s'; el2.style.background=''; }, 400); } } }
+function updateLeadHint(){ // 名前・日付に応じて適用ルールをライブ表示
+  const h=$('#leadHint'); const name=$('#iName').value, date=$('#iDdlDate').value;
+  const rule = leadRuleFor({name}, state.settings);
+  if(rule && rule.days>0 && date){
+    const eff=addDays(parseDateTime(date+'T00:00'), -rule.days);
+    h.hidden=false; h.textContent=`ⓘ 「${rule.keyword}」ルール：締切は納期の${rule.days}日前 ${eff.getMonth()+1}/${eff.getDate()}(${'日月火水木金土'[eff.getDay()]}) になります`;
+  } else h.hidden=true;
 }
-function resetForm(){ editingId=null; $('#taskForm').reset(); setDueMode('deadline'); $('#iInterrupt').checked=false;
+function resetForm(){ editingId=null; $('#taskForm').reset();
   $('#formTitle').textContent='タスクを追加'; $('#btnSubmit').textContent='追加する'; $('#btnCancelEdit').hidden=true;
-  $('#fName').classList.remove('invalid'); $('#fEst').classList.remove('invalid'); }
+  $('#fName').classList.remove('invalid'); $('#fEst').classList.remove('invalid'); $('#leadHint').hidden=true; }
 function startEdit(id){ const t=findTask(id); if(!t) return; editingId=id;
   $('#iName').value=t.name; $('#iEst').value=t.estimateMin; $('#iPrio').value=t.priority;
-  if(t.deadline){ setDueMode('deadline'); $('#iDdl').value=t.deadline; }
-  else { setDueMode('urgency'); $('#iUrg').value=t.urgency||'high'; }
-  $('#iInterrupt').checked=!!t.interrupt;
+  if(t.deadline){ const [d,tm]=t.deadline.split('T'); $('#iDdlDate').value=d; $('#iDdlTime').value=tm||''; }
+  else { $('#iDdlDate').value=''; $('#iDdlTime').value=''; }
+  $('#iNote').value=t.note||'';
   $('#formTitle').textContent='タスクを編集'; $('#btnSubmit').textContent='更新する'; $('#btnCancelEdit').hidden=false;
+  updateLeadHint();
   $('#iName').focus(); window.scrollTo({top:0,behavior:reduceMotion?'auto':'smooth'}); }
 
 function submitForm(e){
@@ -1069,50 +1139,43 @@ function submitForm(e){
   $('#fName').classList.toggle('invalid', !name); if(!name)bad=true;
   $('#fEst').classList.toggle('invalid', !(est>0)); if(!(est>0))bad=true;
   if(bad){ $('#iName').focus(); return; }
-  const ddl = dueMode==='deadline' ? ($('#iDdl').value||null) : null;
-  const urg = dueMode==='urgency'  ? $('#iUrg').value : null;
-  const interrupt = $('#iInterrupt').checked;
+  const ddl = buildDeadline();
+  const note = $('#iNote').value.trim();
   if(editingId){ const t=findTask(editingId);
-    Object.assign(t,{name, estimateMin:est, priority:$('#iPrio').value, deadline:ddl, urgency:urg, interrupt});
+    Object.assign(t,{name, estimateMin:est, priority:$('#iPrio').value, deadline:ddl, note});
     toast('タスクを更新しました','success');
     resetForm(); commit(true); return;
   }
-  const before = computeSchedule(state.tasks, state.settings, new Date()).agg;
   const t={ id:uuid(), name, estimateMin:est, deadline:ddl, priority:$('#iPrio').value,
-    urgency:urg, interrupt, status:'todo', sessions:[], completedAt:null, createdAt:new Date().toISOString() };
+    note, status:'todo', sessions:[], completedAt:null, createdAt:new Date().toISOString() };
   state.tasks.push(t);
-  const after = computeSchedule(state.tasks, state.settings, new Date()).agg;
   commit(true);
-  if(interrupt){
-    const pushed = after.total-1; const newMiss=Math.max(0, after.missCount-before.missCount);
-    toast(`差し込みを反映：${pushed}件を再計算${newMiss>0?`、うち${newMiss}件が新たに締切超過`:''}`,
-      newMiss>0?'danger':'success', 5000);
-  } else toast('タスクを追加しました','success');
+  toast('タスクを追加しました','success');
   resetForm();
 }
 
 function injectSample(){
   const now=new Date();
   const base=nextWorking(now, state.settings)||now; // 次の稼働開始を基準に締切を置く
-  // offH: 締切オフセット(時間)。null=締切なし。urg: 締切なし時の緊急度。interrupt: 突発フラグ
-  const mk=(name,est,prio,offH,urg,interrupt)=>({id:uuid(),name,estimateMin:est,priority:prio,
-    deadline: offH==null?null:fmtInput(addMin(base, offH*60)), urgency:offH==null?(urg||null):null,
-    interrupt:!!interrupt, status:'todo', sessions:[], completedAt:null,
-    createdAt:new Date(now.getTime()+Math.random()).toISOString()});
+  // offH: 締切オフセット(時間)。null=締切なし。
+  const mk=(name,est,prio,offH,note)=>({id:uuid(),name,estimateMin:est,priority:prio,
+    deadline: offH==null?null:fmtInput(addMin(base, offH*60)), note:note||'',
+    status:'todo', sessions:[], completedAt:null, createdAt:new Date(now.getTime()+Math.random()).toISOString()});
   state.tasks.push(
     mk('見積書の送付',45,'high',3),
-    mk('週次レポート作成',90,'medium',7),
+    mk('週次レポート作成',90,'medium',7,'先方フォーマットで提出'),
     mk('資料レビュー',60,'low',30),
-    mk('請求データ確認',30,'medium',null,'low'),     // 締切なし・急がない
+    mk('アイデア整理',30,'medium',null),     // 締切なし → 末尾
   );
   commit(true);
-  toast('サンプルを投入しました。⚡差し込みを追加して、予定が後ろ倒しになる様子を試せます。','success',6000);
+  toast('サンプルを投入しました。締切が早い順に自動で並びます。','success',6000);
 }
 
 /* ---------- 設定ドロワー ---------- */
 function openDrawer(){ const st=state.settings;
   $('#sTheme').value=st.theme; $('#sStart').value=st.workdayStart; $('#sEnd').value=st.workdayEnd;
-  renderBreakRows(st.breaks); renderDayPick(st.workDays);
+  $('#sDefTime').value=st.defaultDeadlineTime||'18:00';
+  renderBreakRows(st.breaks); renderDayPick(st.workDays); renderRuleRows(st.leadRules||[]);
   $('#drawer').classList.add('show'); $('#scrim').classList.add('show'); }
 function closeDrawer(){ $('#drawer').classList.remove('show'); $('#scrim').classList.remove('show'); }
 function renderBreakRows(breaks){ const c=$('#breaks'); c.textContent='';
@@ -1130,6 +1193,20 @@ function renderDayPick(days){ const c=$('#workDays'); c.textContent='';
 function collectBreaks(){ const rows=$('#breaks').querySelectorAll('.breakrow'); const out=[];
   rows.forEach(r=>{ const ins=r.querySelectorAll('input'); out.push({start:ins[0].value, end:ins[1].value}); });
   return out; }
+function renderRuleRows(rules){ const c=$('#leadRules'); c.textContent='';
+  (rules||[]).forEach(r=>{ const row=el('div','rulerow');
+    const k=el('input'); k.type='text'; k.placeholder='キーワード(例:請求)'; k.value=r.keyword||''; k.maxLength=40;
+    const d=el('input'); d.type='number'; d.min='0'; d.max='365'; d.placeholder='日'; d.value=(r.days??'');
+    const cnt=el('span','rulecnt');
+    const x=el('button','btn ghost sm'); x.textContent='✕'; x.type='button'; x.onclick=()=>{ row.remove(); };
+    const upd=()=>{ const kw=k.value.trim(); cnt.textContent = kw? `${state.tasks.filter(t=>(t.name||'').includes(kw)).length}件一致` : ''; };
+    k.addEventListener('input', upd); upd();
+    row.append(k,d,cnt,x); c.append(row); });
+}
+function collectRules(){ const rows=$('#leadRules').querySelectorAll('.rulerow'); const out=[];
+  rows.forEach(r=>{ const ins=r.querySelectorAll('input'); const kw=ins[0].value.trim();
+    if(kw) out.push({keyword:kw, days:parseInt(ins[1].value,10)||0}); });
+  return out; }
 function validateSettings(s){
   const sm=hmToMin(parseHM(s.workdayStart)), em=hmToMin(parseHM(s.workdayEnd));
   $('#sfStart').classList.remove('invalid'); $('#breakErr').style.display='none'; $('#daysErr').style.display='none';
@@ -1140,15 +1217,24 @@ function validateSettings(s){
     if(!(b.s<b.e) || b.s<sm || b.e>em){ $('#breakErr').style.display='block'; return false; }
     if(i>0 && b.s<brs[i-1].e){ $('#breakErr').style.display='block'; return false; } }
   if(s.workDays.length===0){ $('#daysErr').style.display='block'; return false; }
+  $('#sfDefTime').classList.remove('invalid'); $('#ruleErr').style.display='none';
+  if(!/^\d{1,2}:\d{2}$/.test(s.defaultDeadlineTime)){ $('#sfDefTime').classList.add('invalid'); return false; }
+  for(const r of (s.leadRules||[])){ if(!r.keyword || !(Number.isInteger(r.days)&&r.days>=0&&r.days<=365)){ $('#ruleErr').style.display='block'; return false; } }
   return true;
 }
 function saveSettings(){
   const days=[...$('#workDays').querySelectorAll('input:checked')].map(c=>+c.value);
   const next={ theme:$('#sTheme').value, workdayStart:$('#sStart').value, workdayEnd:$('#sEnd').value,
-    breaks:collectBreaks(), workDays:days };
+    breaks:collectBreaks(), workDays:days, defaultDeadlineTime:$('#sDefTime').value, leadRules:collectRules() };
   if(!validateSettings(next)) return;
-  state.settings=sanitizeSettings({...state.settings, ...next});
-  applyTheme(state.settings.theme); closeDrawer(); commit(true); toast('設定を保存しました','success');
+  const newSettings=sanitizeSettings({...state.settings, ...next});
+  // 影響プレビュー：新ルールで前倒しされる未完了タスク
+  const affected=state.tasks.filter(t=>t.status!=='done' && t.deadline && leadDaysFor(t,newSettings)>0);
+  state.settings=newSettings;
+  applyTheme(state.settings.theme); closeDrawer(); commit(true);
+  if(affected.length){ const names=affected.slice(0,3).map(t=>t.name).join('・');
+    toast(`設定を保存。締切ルールで${affected.length}件を前倒し（${names}${affected.length>3?' ほか':''}）`,'success',6000); }
+  else toast('設定を保存しました','success');
 }
 
 /* ---------- テーマ ---------- */
@@ -1171,13 +1257,13 @@ function tickClock(){ $('#clock').textContent=fmtClock(new Date());
  * ===================================================================== */
 function bindEvents(){
   $('#taskForm').addEventListener('submit', submitForm);
-  document.querySelectorAll('#dueSeg button').forEach(b=>b.addEventListener('click',()=>setDueMode(b.dataset.due)));
-  $('#ctaInsert').addEventListener('click',()=>{ setDueMode('urgency'); $('#iUrg').value='high'; $('#iInterrupt').checked=true;
-    $('#iName').focus(); window.scrollTo({top:0,behavior:reduceMotion?'auto':'smooth'}); });
+  $('#iDdlDate').addEventListener('change', ()=>{ fillDefaultTimeIfEmpty(true); updateLeadHint(); });
+  $('#iName').addEventListener('input', updateLeadHint);
   $('#btnCancelEdit').addEventListener('click', resetForm);
   $('#btnSample').addEventListener('click', injectSample);
   // リストの操作（委譲）
   $('#list').addEventListener('click', async e=>{
+    const noteEl=e.target.closest('.card-note'); if(noteEl){ noteEl.classList.toggle('expanded'); return; }
     const btn=e.target.closest('button[data-action]'); if(!btn) return;
     const id=btn.closest('.card').dataset.id; const act=btn.dataset.action;
     if(act==='start') startTask(id);
@@ -1204,6 +1290,7 @@ function bindEvents(){
   $('#scrim').addEventListener('click', ()=>{ closeDrawer(); });
   $('#btnSaveSettings').addEventListener('click', saveSettings);
   $('#btnAddBreak').addEventListener('click', ()=>{ const cur=collectBreaks(); cur.push({start:'15:00',end:'15:15'}); renderBreakRows(cur); });
+  $('#btnAddRule').addEventListener('click', ()=>{ const cur=collectRules(); cur.push({keyword:'',days:3}); renderRuleRows(cur); });
   $('#btnExport').addEventListener('click', exportData);
   $('#btnImport').addEventListener('click', ()=>$('#fileImport').click());
   $('#fileImport').addEventListener('change', async e=>{
@@ -1216,12 +1303,9 @@ function bindEvents(){
     state={tasks:v.store.tasks, settings:v.store.settings}; normalize(); applyTheme(state.settings.theme);
     commit(true); toast('インポートしました','success');
   });
-  // キーボード: I で差し込み、Esc で閉じる
+  // キーボード: Esc で閉じる
   document.addEventListener('keydown', e=>{
-    const typing=/^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement?.tagName);
     if(e.key==='Escape'){ closeDrawer(); $('#confirm').classList.remove('show'); }
-    if((e.key==='i'||e.key==='I') && !typing && !e.metaKey && !e.ctrlKey){
-      e.preventDefault(); setDueMode('urgency'); $('#iUrg').value='high'; $('#iInterrupt').checked=true; $('#iName').focus(); }
   });
   // 復帰/離脱
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ render(false); } else flushSave(); });
@@ -1234,7 +1318,6 @@ function init(){
   load();
   applyTheme(state.settings.theme);
   bindEvents();
-  setDueMode('deadline');
   tickClock();
   render(false);
   setInterval(tickClock, 1000);
@@ -1248,10 +1331,10 @@ function init(){
  * ===================================================================== */
 function runSelfTests(){
   let pass=0, fail=0; const ok=(c,m)=>{ c?pass++:(fail++,console.error('FAIL:',m)); };
-  const ST={workdayStart:'09:00',workdayEnd:'18:00',breaks:[{start:'12:00',end:'13:00'}],workDays:[1,2,3,4,5],theme:'system'};
+  const ST={workdayStart:'09:00',workdayEnd:'18:00',breaks:[{start:'12:00',end:'13:00'}],workDays:[1,2,3,4,5],theme:'system',defaultDeadlineTime:'18:00',leadRules:[]};
   // 基準: 2024-06-17(月) 09:00
   const mon = new Date(2024,5,17,9,0,0,0);
-  const T=(o)=>Object.assign({id:uuid(),name:'t',estimateMin:60,deadline:null,priority:'medium',interrupt:false,urgency:null,status:'todo',sessions:[],completedAt:null,createdAt:'2024-01-01T00:00'},o);
+  const T=(o)=>Object.assign({id:uuid(),name:'t',estimateMin:60,deadline:null,priority:'medium',note:'',status:'todo',sessions:[],completedAt:null,createdAt:'2024-01-01T00:00'},o);
   // (a) EDD 並び
   let r=computeSchedule([T({name:'late',deadline:'2024-06-17T17:00'}),T({name:'early',deadline:'2024-06-17T11:00'})], ST, mon);
   ok(r.items[0].task.name==='early','(a) EDDで締切が近い順');
@@ -1261,16 +1344,19 @@ function runSelfTests(){
   r=computeSchedule([T({name:'x',estimateMin:240})], ST, mon); // 4h: 9-12(180)+13-14(60)=14:00
   ok(fmtHM(r.items[0].scheduledEnd)==='14:00','(b2) 休憩跨ぎ240分→14:00');
   ok(r.items[0].segments.length===2,'(b3) 休憩で2区間に分割');
-  // (c) 締切なし・緊急度high が締切ありタスクより前に来て後続を後ろ倒し（種別非依存）
-  const base=[T({name:'A',estimateMin:60,deadline:'2024-06-17T17:00'})];
-  const before=computeSchedule(base, ST, mon).items[0].scheduledEnd;
-  const r2=computeSchedule([T({name:'urgent',estimateMin:60,deadline:null,urgency:'high'}), ...base], ST, mon);
-  ok(r2.items[0].task.name==='urgent','(c1) 緊急度high(締切なし)が先頭');
-  const aEnd=r2.items.find(i=>i.task.name==='A').scheduledEnd;
-  ok(aEnd.getTime()>before.getTime(),'(c2) 緊急で締切ありAが後ろ倒し');
-  // (c3) 緊急度low/未指定は末尾
-  const r3=computeSchedule([T({name:'low',urgency:'low'}),T({name:'dl',deadline:'2024-06-17T17:00'})], ST, mon);
-  ok(r3.items[r3.items.length-1].task.name==='low','(c3) 急がない(締切なし)は末尾');
+  // (c) 締切なしは末尾（純EDD）
+  const r2=computeSchedule([T({name:'noddl'}),T({name:'dl',deadline:'2024-06-17T17:00'})], ST, mon);
+  ok(r2.items[r2.items.length-1].task.name==='noddl' && r2.items[0].task.name==='dl','(c) 締切なしは末尾');
+  // (k) リード規則: 「請求書」は納期−3日が実効締切＝同一納期で無ルール同名より前
+  const ST2={...ST, leadRules:[{keyword:'請求',days:3}]};
+  const rk=computeSchedule([T({name:'資料',deadline:'2024-06-20T17:00'}),T({name:'請求書',deadline:'2024-06-20T17:00'})], ST2, mon);
+  ok(rk.items[0].task.name==='請求書','(k1) リードで請求書が前');
+  const ek=effectiveDeadline({name:'請求書',deadline:'2024-06-20T17:00'}, ST2);
+  ok(ek.getMonth()===5 && ek.getDate()===17 && fmtHM(ek)==='17:00','(k2) 実効締切=納期−3日(6/17)');
+  ok(effectiveDeadline({name:'資料',deadline:'2024-06-20T17:00'}, ST2).getDate()===20,'(k3) 無一致は納期どおり');
+  // (l) 前倒しで willMissDeadline が早く立つ
+  const rl=computeSchedule([T({name:'請求まとめ',estimateMin:120,deadline:'2024-06-18T10:00'})], ST2, mon); // effective=6/15 < now → 超過
+  ok(rl.items[0].willMissDeadline===true,'(l) リード前倒しで締切超過予定');
   // (d) フラグ
   r=computeSchedule([T({name:'miss',estimateMin:120,deadline:'2024-06-17T10:00'})], ST, mon);
   ok(r.items[0].willMissDeadline===true,'(d1) 締切超過予定');
