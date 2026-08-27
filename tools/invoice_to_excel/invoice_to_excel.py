@@ -59,6 +59,8 @@ class Invoice:
     total: int
     items: list[LineItem] = field(default_factory=list)
     source: str = ""
+    # 明細らしき見た目なのに定義に当てはまらなかった行。項目が増えた月の検知に使う。
+    unparsed: list[str] = field(default_factory=list)
 
 
 def to_int(s: str) -> int:
@@ -82,6 +84,25 @@ def read_text(pdf_path: Path) -> str:
     return text
 
 
+# 金額らしいトークン（桁区切りのある数、または3桁以上の数）。マイナスも拾う。
+MONEY = re.compile(r"-?\d{1,3}(?:,\d{3})+|-?\d{3,}")
+
+
+def looks_like_row(line: str) -> bool:
+    """明細欄の中で、金額を含むのに定義に当てはまらなかった行か。"""
+    return bool(MONEY.search(line))
+
+
+def item_region(lines: list[str], region: dict | None) -> list[str]:
+    """明細欄だけを切り出す。宛先や合計欄を明細と取り違えないための境界。"""
+    if not region:
+        return lines
+    start, end = region.get("start"), region.get("end")
+    a = next((i + 1 for i, l in enumerate(lines) if start and start in l), 0)
+    b = next((i for i, l in enumerate(lines) if i >= a and end and end in l), len(lines))
+    return lines[a:b]
+
+
 def find_one(pattern: str, text: str, label: str) -> str:
     m = re.search(pattern, text, re.MULTILINE)
     if not m:
@@ -97,9 +118,11 @@ def parse(text: str, fmt: dict, source: str) -> Invoice:
     totals = fmt["totals"]
 
     items: list[LineItem] = []
+    unparsed: list[str] = []
     pattern = re.compile(fmt["line_item"])
     excludes = fmt.get("line_item_exclude", [])
-    for line in text.splitlines():
+    region = item_region(text.splitlines(), fmt.get("line_item_region"))
+    for line in region:
         line = line.strip()
         if not line or any(x in line for x in excludes):
             continue
@@ -113,6 +136,8 @@ def parse(text: str, fmt: dict, source: str) -> Invoice:
                     amount=to_int(m.group("amount")),
                 )
             )
+        elif looks_like_row(line):
+            unparsed.append(line)
 
     if not items:
         raise ExtractionError("明細行を1件も読み取れませんでした。")
@@ -126,6 +151,7 @@ def parse(text: str, fmt: dict, source: str) -> Invoice:
         total=to_int(find_one(totals["total"], text, "合計金額")),
         items=items,
         source=source,
+        unparsed=unparsed,
     )
 
 
@@ -143,6 +169,11 @@ def verify(inv: Invoice) -> list[str]:
     items_sum = sum(i.amount for i in inv.items)
     if items_sum != inv.subtotal:
         problems.append(f"明細合計={items_sum:,} だが 小計={inv.subtotal:,}")
+        if inv.unparsed:
+            problems.append(
+                "読み取れなかった行があります（請求書に新しい項目が増えた可能性）: "
+                + " / ".join(inv.unparsed)
+            )
 
     if inv.subtotal + inv.tax != inv.total:
         problems.append(
@@ -150,6 +181,31 @@ def verify(inv: Invoice) -> list[str]:
         )
 
     return problems
+
+
+def rows_of(inv: Invoice) -> list[list]:
+    """1請求書ぶんの行。先頭行にだけ合計欄を入れる（Excel/TSVで共通）。"""
+    out = []
+    for i, item in enumerate(inv.items):
+        first = i == 0
+        out.append([
+            inv.invoice_no, inv.issue_date, inv.customer,
+            item.name, item.qty, item.unit, item.amount,
+            inv.subtotal if first else None,
+            inv.tax if first else None,
+            inv.total if first else None,
+            inv.source if first else None,
+        ])
+    return out
+
+
+def write_tsv(path: Path, invoices: list[Invoice]) -> None:
+    """スプレッドシートへ直接貼り付けるためのTSV。Excelを開かずに使える。"""
+    lines = ["\t".join(COLUMNS)]
+    for inv in invoices:
+        for row in rows_of(inv):
+            lines.append("\t".join("" if v is None else str(v) for v in row))
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def load_sheet(excel: Path, sheet: str):
@@ -172,36 +228,31 @@ def existing_numbers(ws) -> set[str]:
 
 
 def append(ws, inv: Invoice) -> None:
-    for i, item in enumerate(inv.items):
-        first = i == 0
-        ws.append([
-            inv.invoice_no,
-            inv.issue_date,
-            inv.customer,
-            item.name,
-            item.qty,
-            item.unit,
-            item.amount,
-            inv.subtotal if first else None,
-            inv.tax if first else None,
-            inv.total if first else None,
-            inv.source if first else None,
-        ])
+    for row in rows_of(inv):
+        ws.append(row)
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pdfs", nargs="+", help="請求書PDF（複数可）")
     ap.add_argument("--format", required=True, help="フォーマット定義JSON")
-    ap.add_argument("--excel", required=True, help="追記先のExcelファイル")
+    ap.add_argument("--excel", help="追記先のExcelファイル")
+    ap.add_argument("--tsv", help="スプレッドシートへ貼り付ける用のTSVを書き出す")
     ap.add_argument("--sheet", default="請求明細", help="シート名")
     ap.add_argument("--dry-run", action="store_true", help="Excelに書かず検算結果だけ表示")
     args = ap.parse_args()
 
+    if not args.excel and not args.tsv:
+        ap.error("--excel か --tsv のどちらかを指定してください。")
+
     fmt = json.loads(Path(args.format).read_text(encoding="utf-8"))
-    excel = Path(args.excel)
-    wb, ws = load_sheet(excel, args.sheet)
-    already = existing_numbers(ws)
+    excel = Path(args.excel) if args.excel else None
+    if excel:
+        wb, ws = load_sheet(excel, args.sheet)
+        already = existing_numbers(ws)
+    else:
+        wb = ws = None
+        already = set()
 
     ok: list[Invoice] = []
     skipped: list[tuple[str, str]] = []
@@ -236,12 +287,16 @@ def main() -> int:
         return 1 if skipped else 0
 
     if ok:
-        for inv in ok:
-            append(ws, inv)
-        wb.save(excel)
-        print(f"\n{len(ok)}件を {excel} に追記しました。")
+        if excel:
+            for inv in ok:
+                append(ws, inv)
+            wb.save(excel)
+            print(f"\n{len(ok)}件を {excel} に追記しました。")
+        if args.tsv:
+            write_tsv(Path(args.tsv), ok)
+            print(f"{len(ok)}件を {args.tsv} に書き出しました（スプレッドシートに貼り付けられます）。")
     else:
-        print("\n転記できた請求書はありません。Excelは変更していません。")
+        print("\n転記できた請求書はありません。出力は変更していません。")
 
     if skipped:
         print(f"{len(skipped)}件は転記していません。上の理由を確認してください。")
