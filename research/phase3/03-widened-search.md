@@ -99,25 +99,61 @@
 薄いニッチの正しい探し方は**カテゴリを新着順で毎日見ること**。
 量はクエリの幅からではなく、**時間**から得る。
 
-### 毎日見る（5〜10分）
+### 【2026/8/28 訂正】URLは渡さない。サイト内のナビゲーションから辿ること
+
+当方は crowdworks.jp をegressプロキシで開けないため、**渡したURLを動作確認できていない。**
+実際 `/public/jobs/special_features/14` はユーザー環境で開けなかった（特集ページは入れ替わる）。
+さらに、前回渡したURLの一部は**発注者側URLからの推測**であり、実在を確認していなかった。
+
+以下に区分を明示する。
+
+#### 検索結果に実在が確認できたもの（jobs側）
 
 | ページ | URL |
 |---|---|
-| 短い作業時間でOK！マクロ・VBAなどツール制作 | `/public/jobs/special_features/14` |
-| Excel VBA・マクロ開発 | `/public/jobs/category/13` |
-| Google Apps Script | `/public/jobs/skill/321` |
-
-### 2〜3日おきに見る
-
-| ページ | URL |
-|---|---|
-| エクセル作成 | `/public/jobs/category/203` |
-| データ入力・集計(Excel) | `/public/jobs/skill/12517` |
-| データ集計・解析 | `/public/jobs/skill/9028` |
+| Excel VBA・マクロ開発 | `/public/jobs/category/13` （`?page=2` でページ送り可） |
+| Excel(VBA・マクロ) スキル | `/public/jobs/skill/423` |
+| データ入力・集計(Excel) スキル | `/public/jobs/skill/12517` |
 | AIシステム開発・導入・自動化支援 | `/public/jobs/category/370` |
+| その他業務AI化支援 | `/public/jobs/category/372` |
+| AI・チャットボット開発 | `/public/jobs/category/283` |
+| キーワード検索 | `/public/jobs/search?search[keywords]=...` （**動作確認済み**） |
 
-※ `/public/jobs/...` が仕事を探す側。`/public/employees/...` は発注側なので開かない。
-※ skill配下のURLは employees 側からの推定を含む。開いて404なら、カテゴリ一覧から辿ること。
+#### 未確認（推測で組み立てたもの・使わないこと）
+
+`/public/jobs/skill/321`（GAS）／`/public/jobs/category/203`（エクセル作成）／
+`/public/jobs/skill/9028`（データ集計・解析）／`/public/jobs/category/52`／`/public/jobs/category/149`
+
+**これらは発注者側URL（`/public/employees/...`）から推測したもので、実在を確認していない。**
+
+#### 確実な辿り方 — 左サイドバーを使う
+
+URLを打つのではなく、画面のナビゲーションから入る。これなら番号が変わっても壊れない。
+
+1. ヘッダーの **「仕事を探す」**
+2. 左サイドバーの **仕事カテゴリ** から選ぶ
+
+ユーザーのスクリーンショットで確認できたサイドバーの並びは以下。
+
+> **AI-BPO（AI活用の業務改善）** ／ システム開発 ／ AI（人工知能）・機械学習 ／
+> アプリ・スマートフォン開発 ／ ホームページ制作・Webデザイン ／ ECサイト・ネットショップ構築 ／
+> デザイン ／ 動画・映像・アニメーション ／ …（略）… ／ 事務・カンタン作業
+
+**先頭の「AI-BPO（AI活用の業務改善）」は未探索。名前がそのまま我々の領域なので最優先で開く。**
+
+Excel系は **システム開発 → Excel VBA・マクロ開発** で辿れる。
+スキル側のサイドバーには **アプリケーション（Windows Office/Adobe製品）** があり、ここにもExcelが入る。
+
+#### 最も確実な運用 — 動く検索URLを1本持ち、キーワードだけ差し替える
+
+キーワード検索URLは実際に動いた実績がある。これを基準にする。
+
+```
+https://crowdworks.jp/public/jobs/search?search[exclude_keywords]=カンタン シンプル スキマ時間 主婦&search[keywords]=<ここだけ変える>
+```
+
+検索結果ページの**左サイドバーにカテゴリの絞り込みがある**ので、
+キーワードで引いてから結果ページ内でカテゴリを絞る方が、カテゴリURLを直接叩くより確実。
 
 ### 運用
 
