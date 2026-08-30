@@ -109,6 +109,7 @@ def e(s: str) -> str:
 def main() -> None:
     d = json.loads((HERE / "coconala-fields.json").read_text(encoding="utf-8"))
     service, please, faq = d["service"], d["please"], d["faq"]
+    pf_full, pf_short = d["profile_full"], d["profile_short"]
 
     for key, txt in (("service", service), ("please", please)):
         if len(txt) > LIMITS[key]:
@@ -127,10 +128,11 @@ def main() -> None:
         f'<pre class="btext" id="a{i}">{e(a)}</pre></div>'
         for i, (q, a) in enumerate(faq, 1))
 
-    def block(key: str, label: str, txt: str) -> str:
-        n, lim = len(txt), LIMITS[key]
+    def block(key: str, label: str, txt: str, lim: int | None = None) -> str:
+        n = len(txt) if lim is None else None
+        badge = f"{len(txt)} / {lim}字" if lim else f"{len(txt)}字"
         return (f'<div class="block"><div class="bhead"><b>{e(label)}</b>'
-                f'<span class="count">{n} / {lim}字</span>'
+                f'<span class="count">{badge}</span>'
                 f'<button class="copy" data-target="{key}">全文をコピー</button></div>'
                 f'<pre class="btext" id="{key}">{e(txt)}</pre></div>')
 
@@ -155,17 +157,24 @@ def main() -> None:
 
 <h2>サービス内容</h2>
 <p class="hint">上限{LIMITS["service"]}字。余白{LIMITS["service"] - len(service)}字。</p>
-{block("service", "サービス内容", service)}
+{block("service", "サービス内容", service, LIMITS["service"])}
 
 <h2>購入にあたってのお願い</h2>
 <p class="hint">上限{LIMITS["please"]}字。余白{LIMITS["please"] - len(please)}字。
 対象外の条件・進め方・データの扱いだけに絞ってあります。</p>
-{block("please", "購入にあたってのお願い", please)}
+{block("please", "購入にあたってのお願い", please, LIMITS["please"])}
 
 <h2>よくある質問</h2>
 <p class="hint">1件ずつ登録します。反論を先に潰す欄です。特にQ1（枚数）とQ6（不安）は、
 書いておかないと問い合わせすら来ずに離脱されます。</p>
 {faq_html}
+
+<h2>プロフィール</h2>
+<p class="hint">出品ページを見た人は、買う前に必ずプロフィールを見ます。実績0のうちはここで判断されます。
+ココナラとクラウドワークスの両方に入れてください。<b>欄の上限が分からないので2案あります。</b>
+入る方を使い、どちらも入らなければ上限字数を教えてください。</p>
+{block("profile_full", "フル版（余裕がある欄に）", pf_full)}
+{block("profile_short", "短縮版（上限が厳しい欄に）", pf_short)}
 
 <h2>画像</h2>
 <p class="hint">別途お渡しした2枚を使います。どちらもダミーデータなので、そのまま公開できます。</p>
