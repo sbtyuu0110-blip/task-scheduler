@@ -164,11 +164,15 @@ def verify(inv: Invoice) -> list[str]:
         if expected != item.amount:
             problems.append(
                 f"明細「{item.name}」: 数量×単価={expected:,} だが 金額={item.amount:,}"
+                f"（差額 {item.amount - expected:+,}）"
             )
 
     items_sum = sum(i.amount for i in inv.items)
     if items_sum != inv.subtotal:
-        problems.append(f"明細合計={items_sum:,} だが 小計={inv.subtotal:,}")
+        problems.append(
+            f"明細合計={items_sum:,} だが 小計={inv.subtotal:,}"
+            f"（差額 {items_sum - inv.subtotal:+,}）"
+        )
         if inv.unparsed:
             problems.append(
                 "読み取れなかった行があります（請求書に新しい項目が増えた可能性）: "
@@ -178,6 +182,7 @@ def verify(inv: Invoice) -> list[str]:
     if inv.subtotal + inv.tax != inv.total:
         problems.append(
             f"小計+消費税={inv.subtotal + inv.tax:,} だが 合計金額={inv.total:,}"
+            f"（差額 {inv.subtotal + inv.tax - inv.total:+,}）"
         )
 
     return problems
