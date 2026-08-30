@@ -1,0 +1,354 @@
+<title>請求書転記 出品キット</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Old+Mincho:wght@700;900&family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+:root{
+  --paper:#FBFBF9; --panel:#F4F5F1; --ink:#1A1D1A; --mid:#5C625B; --faint:#8A8F88;
+  --rule:#DDE0DA; --rule2:#BFC4BC; --ok:#1F5A3D; --okbg:#E7F0E9;
+  --ng:#A32B21; --ngbg:#F7E8E6; --accent:#2C4A7C;
+  --serif:"Zen Old Mincho",serif;
+  --sans:"BIZ UDPGothic","Hiragino Sans","Noto Sans JP",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#141614; --panel:#1C1F1C; --ink:#E8EAE6; --mid:#A2A89F; --faint:#767C74;
+  --rule:#2C302C; --rule2:#3E443E; --ok:#6FBF8F; --okbg:#18291F;
+  --ng:#E8776B; --ngbg:#2B1917; --accent:#8FAFD9;
+}}
+:root[data-theme="dark"]{
+  --paper:#141614; --panel:#1C1F1C; --ink:#E8EAE6; --mid:#A2A89F; --faint:#767C74;
+  --rule:#2C302C; --rule2:#3E443E; --ok:#6FBF8F; --okbg:#18291F;
+  --ng:#E8776B; --ngbg:#2B1917; --accent:#8FAFD9;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.85;-webkit-font-smoothing:antialiased}
+.wrap{max-width:880px;margin:0 auto;padding:0 20px 100px}
+header{padding:56px 0 26px;border-bottom:3px double var(--rule2);margin-bottom:34px}
+.eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--faint);margin:0 0 16px}
+h1{font-family:var(--serif);font-weight:900;font-size:clamp(28px,5vw,40px);line-height:1.3;
+  margin:0 0 16px;text-wrap:balance}
+.lede{color:var(--mid);margin:0;max-width:60ch;font-size:15.5px}
+h2{font-family:var(--serif);font-weight:700;font-size:21px;margin:44px 0 6px}
+.hint{color:var(--faint);font-size:13.5px;margin:0 0 18px}
+.field{border:1px solid var(--rule);border-radius:3px;margin-bottom:14px;background:var(--panel)}
+.fmeta{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding:11px 14px 0}
+.flabel{font-weight:700;font-size:13.5px;letter-spacing:.04em}
+.fnote{color:var(--faint);font-size:12.5px}
+.frow{display:flex;align-items:flex-start;gap:12px;padding:8px 14px 14px}
+.ftext{flex:1;margin:0;font-family:var(--sans);font-size:15px;line-height:1.75;
+  white-space:pre-wrap;word-break:break-word;min-width:0}
+.block{border:1px solid var(--rule);border-radius:3px;background:var(--panel);overflow:hidden}
+.bhead{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 14px;border-bottom:1px solid var(--rule)}
+.bhead b{font-size:13.5px;letter-spacing:.04em}
+.btext{margin:0;padding:18px 20px;font-family:var(--sans);font-size:14.5px;line-height:1.95;
+  white-space:pre-wrap;word-break:break-word;max-height:440px;overflow-y:auto}
+button.copy{font-family:var(--sans);font-size:13px;font-weight:700;white-space:nowrap;
+  padding:7px 16px;border:1px solid var(--ok);border-radius:3px;
+  background:var(--okbg);color:var(--ok);cursor:pointer}
+button.copy:hover{background:var(--ok);color:var(--paper)}
+button.copy:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.copy.done{background:var(--ok);color:var(--paper);border-color:var(--ok)}
+.warn{border-left:3px solid var(--ng);background:var(--ngbg);padding:14px 18px;margin:26px 0;
+  font-size:14.5px;line-height:1.8}
+.warn b{color:var(--ng)}
+ol.steps{margin:0;padding-left:1.3em;max-width:62ch}
+ol.steps li{margin-bottom:11px;line-height:1.8}
+ol.steps li::marker{color:var(--faint);font-family:var(--mono)}
+footer{margin-top:56px;padding-top:22px;border-top:3px double var(--rule2);
+  font-family:var(--mono);font-size:11.5px;color:var(--faint);line-height:1.9}
+@media (max-width:560px){.frow{flex-direction:column;align-items:stretch}
+  button.copy{width:100%}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+<header>
+  <p class="eyebrow">ココナラ 出品用 ／ 2026年8月30日</p>
+  <h1>請求書PDFのExcel転記を自動化します</h1>
+  <p class="lede">各欄の「コピー」を押して、ココナラの出品画面にそのまま貼ってください。
+  記号や装飾は入っていないので、貼ったまま公開できます。</p>
+</header>
+
+<h2>入力欄</h2>
+<p class="hint">上から順に埋めていけば終わります。</p>
+      <div class="field">
+        <div class="fmeta"><span class="flabel">タイトル</span><span class="fnote">そのまま貼る。ココナラは「〜します」で終わる形式</span></div>
+        <div class="frow">
+          <pre class="ftext" id="f0">請求書PDFのExcel転記を自動化します</pre>
+          <button class="copy" data-target="f0">コピー</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="fmeta"><span class="flabel">キャッチコピー</span><span class="fnote">タイトル下に出る一文</span></div>
+        <div class="frow">
+          <pre class="ftext" id="f1">合わない数字は転記せず停止／同じ様式を毎月処理する方へ</pre>
+          <button class="copy" data-target="f1">コピー</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="fmeta"><span class="flabel">価格</span><span class="fnote">「1フォーマット」だと1枚あたりと誤読されるため変更済み</span></div>
+        <div class="frow">
+          <pre class="ftext" id="f2">9800</pre>
+          <button class="copy" data-target="f2">コピー</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="fmeta"><span class="flabel">納期</span><span class="fnote">実際は3日で出せても、約束は7日にしておく</span></div>
+        <div class="frow">
+          <pre class="ftext" id="f3">7</pre>
+          <button class="copy" data-target="f3">コピー</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="fmeta"><span class="flabel">タグ</span><span class="fnote">「請求書」「PDF」「転記」は必ず入れる。ここが薄い領域</span></div>
+        <div class="frow">
+          <pre class="ftext" id="f4">Excel 請求書 PDF 転記 自動化 業務効率化 VBA GAS スプレッドシート 経理 データ入力 Python</pre>
+          <button class="copy" data-target="f4">コピー</button>
+        </div>
+      </div>
+
+<h2>サービス内容（本文）</h2>
+<p class="hint">出品画面の「サービス内容」欄にそのまま貼ります。</p>
+<div class="block">
+  <div class="bhead"><b>本文</b><button class="copy" data-target="body">全文をコピー</button></div>
+  <pre class="btext" id="body">毎月とどく請求書のPDFを、Excel（またはスプレッドシート）へ
+自動で転記する仕組みをお作りします。
+
+
+■ こんな方へ
+
+・毎月、請求書PDFを開いてExcelに手入力している
+・1回15分〜30分だが、毎月なので地味に負担
+・つい後回しにして、請求書が溜まりがち
+・入力ミスがないか、毎回目視で確認している
+
+同じ発行元から、毎月同じ形式で届く請求書が対象です。
+
+
+■ お届けするもの
+
+・請求書PDFを読み取り、必要な項目だけを抜き出す仕組み
+・Excelの台帳に追記、または
+　スプレッドシートへそのまま貼り付けられる形での出力
+・金額の検算機能（下記）
+・操作手順書（3ステップ程度の簡単なもの）
+
+作業はボタン1つ、または1行のコマンドで完了します。
+
+
+■ 料金について（枚数は関係ありません）
+
+9,800円は「請求書1枚あたり」ではなく、
+「仕組みを1つお作りする費用」です。
+
+一度お作りすれば、
+・同じ書式の請求書は、何枚でも処理できます
+・毎月くり返しお使いいただけます
+・追加の費用はかかりません
+
+追加費用がかかるのは、
+別の発行元・別の書式を増やす場合だけです（1つにつき追加）。
+
+
+■ このサービスの中心は「転記」ではなく「検算」です
+
+自動化でこわいのは、動かなくなることではありません。
+動いているように見えて、静かに間違え続けることです。
+
+実際にこういう例があります。
+ある会社では請求書の取込ツールが動いていましたが、
+請求書の書式が変わったことに気づかないまま、
+明細が取れず合計金額だけが入る状態になり、
+決算で数字が合わないと分かるまで運用が続いていました。
+
+そこで、お作りするものには必ず検算を入れます。
+
+・各行の 数量 × 単価 と 金額 が一致するか
+・明細の合計 と 小計 が一致するか
+・小計 ＋ 消費税 と 合計金額 が一致するか
+
+1つでも合わなければ、Excelには書き込みません。
+そして「この行が読み取れませんでした」と、
+具体的な行の名前を出して止まります。
+
+例：
+　検算不一致 — 明細合計=31,140 だが 小計=30,000（差額 +1,140）
+　読み取れなかった行があります： 前月調整額 -1,140
+
+差額まで出しますので、どこがおかしいのかをご自身で確認できます。
+
+黙って1行落ちた表よりも、止まった方が安全だと考えています。
+
+
+■ 請求書の書式が毎月少し変わる場合
+
+実際の請求書は、項目が増えたり位置が動いたりします。
+そこも想定して作ります。
+
+・新しい項目が増えた／行数が変わった
+　→ そのまま処理できます
+
+・行の作りが違う項目が来た（数量や単価のない調整額など）
+　→ 止めて、その行をお知らせします
+
+止まった月は、その分だけ手で入れていただくか、
+ご連絡いただければ対応を追加します。
+
+
+■ お受けできないこと（先にお伝えします）
+
+・スキャンした紙・写真・手書きの請求書
+　画像から文字を読む処理は100%にできず、誤読を検算できないためです
+　発行元からデータ形式のPDFを受け取れる場合はご相談ください
+
+・発行元ごとに書式が違う請求書をまとめて処理すること
+　（1つの発行元・1つの書式が対象です）
+
+・会計ソフトへの直接連携
+
+・転記結果そのものの正当性の保証
+　（検算はしますが、最終確認はお客様にお願いしています）
+
+
+■ 購入前に、1枚だけ無料でお試しいただけます
+
+「うちの請求書で本当に動くのか」が一番の不安だと思います。
+
+購入前のメッセージで、請求書PDFを1枚お送りください。
+（金額の部分は塗りつぶしていただいて構いません）
+
+こちらで読み取りを試し、
+・そもそも対応できる形式か
+・どの項目が取り出せるか
+を、実際の出力結果でお返しします。
+
+対応できない形式だった場合は、その時点でお断りします。
+無理にお受けして納品できない方が、お互いに損だと考えています。
+
+
+■ 進め方
+
+1. 購入前のメッセージで、請求書PDFを1枚拝見します（無料）
+2. 抜き出す項目の一覧をこちらから提示し、ご確認いただきます
+3. ご購入後、作成します
+4. 実際の1枚で動作をご確認いただき、操作手順書をお渡しします
+
+
+■ ご相談のときに教えていただきたいこと
+
+・請求書PDF（1〜3枚。金額は塗りつぶしていただいて構いません）
+・転記先のExcel／スプレッドシート（列の並びが分かるもの）
+・いま、その作業に毎月どのくらい時間がかかっているか
+・請求書は毎月何枚ほど届くか
+・発行元は1社ですか、複数ですか
+
+これが分かれば、対応できるかどうかを具体的にお答えできます。
+
+
+■ 使用する技術
+
+Python / Google Apps Script / Excelマクロ
+ご希望の運用に合わせて選びます。指定がなければこちらで判断します。
+
+
+■ お預かりするデータについて
+
+作業完了後に削除します。
+取引先名・金額を第三者に開示することはありません。
+動作確認は、可能な限りダミーデータで行います。
+
+
+■ 実績について
+
+ココナラでの販売はこれからです。
+そのため、言葉ではなく実際の動作でご判断いただければと思います。
+
+上の画像は、すべてダミー請求書での実行結果です。
+・3件を読み取ってExcelに転記した結果
+・書式が変わった月を検知して停止した画面
+・スキャンPDFを対象外として拒否した画面
+
+ご不明な点は、購入前にお気軽にご質問ください。</pre>
+</div>
+
+<h2>購入前の返信テンプレート</h2>
+<p class="hint">問い合わせが来たときに返す文面です。出品欄には貼りません。手元に置いておきます。</p>
+<div class="block">
+  <div class="bhead"><b>ヒアリング</b><button class="copy" data-target="hear">コピー</button></div>
+  <pre class="btext" id="hear">ご相談ありがとうございます。
+対応できるかどうかを確認したいので、差し支えなければ以下を教えてください。
+
+・請求書PDFを1〜3枚（金額の部分は塗りつぶしていただいて構いません）
+・転記先のExcel／スプレッドシート（列の並びが分かるもの）
+・いま、その作業に毎月どのくらい時間がかかっているか
+・請求書は毎月何枚ほど届くか
+・発行元は1社ですか、複数ですか
+
+こちらで読み取りを試し、
+・そもそも対応できる形式か
+・どの項目が取り出せるか
+を、実際の出力結果でお返しします（無料です）。
+
+対応できない形式だった場合は、その時点で正直にお伝えします。</pre>
+</div>
+
+<h2>画像</h2>
+<p class="hint">別途お渡しした2枚を使います。どちらもダミーデータなので、そのまま公開できます。</p>
+<ol class="steps">
+  <li><b>サムネイル</b>（1200×900）— 一覧に出る1枚目</li>
+  <li><b>実行結果</b>（縦長）— サービス内容の下に追加</li>
+</ol>
+
+<div class="warn">
+  <b>出品前に3つだけ確認してください。</b><br>
+  ① 購入前メッセージでのファイル受け渡しが規約上どこまで可能か（「無料で1枚試す」の前提）<br>
+  ② サムネイルの推奨比率（1200×900で作成。違えば作り直します）<br>
+  ③ カテゴリは「Excelマクロ・VBA作成」で適切か
+</div>
+
+<h2>出品後</h2>
+<ol class="steps">
+  <li><b>1週間後</b> — 「請求書 Excel 転記」で検索して、自分の出品が出るか確認する。これは動作確認であって需要の判定ではありません</li>
+  <li><b>3〜4週間後</b> — サービス分析で閲覧数を見る。<b>30未満なら判定不能</b>。タイトルとタグを変えて計測し直します</li>
+  <li><b>閲覧が伸びなくても商品を否定しない</b> — これは9月中の3経路のうち1本です</li>
+</ol>
+
+<footer>
+  AI副業探索プロジェクト ／ Phase 3<br>
+  原文: research/phase3/07-coconala-listing.md ／ 実装: tools/invoice_to_excel/
+</footer>
+</div>
+
+<script>
+document.querySelectorAll("button.copy").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var el = document.getElementById(b.dataset.target);
+    var text = el.textContent;
+    function done() {
+      var old = b.textContent;
+      b.textContent = "コピーしました";
+      b.classList.add("done");
+      setTimeout(function () { b.textContent = old; b.classList.remove("done"); }, 1600);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); done(); }
+      catch (e) { b.textContent = "選択してコピーしてください"; }
+      document.body.removeChild(ta);
+    }
+  });
+});
+</script>
