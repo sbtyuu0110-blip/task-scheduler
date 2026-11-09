@@ -8,12 +8,12 @@
  *   token      合言葉（スクリプト プロパティの TOKEN_<端末名> と一致すること）
  *   id         メモID（例 20261103-153012-4821-iP）。同じIDは二重に登録しない
  *   createdAt  入力した時刻（ISO 8601。例 2026-11-03T15:30:12+09:00）
- *   type       'text'（省略時）または 'ink'（手書き）
+ *   type       'text'（省略時）、'ink'（手書き）、'ping'（速度測定。何も書き込まない）
  *   text       本文
  *   image      手書き画像（PNG を Base64 にしたもの。type が 'ink' のときだけ）
  *
  * 返事（文字だけ）:
- *   OK / OK-DUP（受け取り済み）/ OK-EMPTY（空なので何もしない）
+ *   OK / OK-DUP（受け取り済み）/ OK-EMPTY（空なので何もしない）/ OK-PING（測定）
  *     → 「OK」で始まれば、端末は控えを消してよい
  *   NG（合言葉が違う）/ BADREQ（形式が不正）/ TOOBIG（大きすぎる）/ ERROR（その他）
  *     → 端末は控えを残す
@@ -62,6 +62,9 @@ function handle(e, log) {
   const device = deviceForToken(data.token);
   if (!device) return 'NG';
   log.device = device;
+
+  // 速度測定用。シートには何も書かない
+  if (data.type === 'ping') return 'OK-PING';
 
   // 旧ショートカット（IDなし）からの送信も受け付ける
   const id = data.id ? String(data.id) : 'SV-' + Utilities.getUuid();

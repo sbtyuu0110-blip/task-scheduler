@@ -1,0 +1,31 @@
+# Surface 用の試作アプリ QuickInk を組み立てる。
+# 完成品は、この実行結果のページ下部「Artifacts」から zip でダウンロードできる。
+name: QuickInk build
+
+on:
+  push:
+    paths:
+      - 'inbox/surface/**'
+      - '.github/workflows/quickink.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        rid: [win-arm64, win-x64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish
+        run: >
+          dotnet publish inbox/surface/QuickInk -c Release -r ${{ matrix.rid }} --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true -p:DebugType=none -o out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: QuickInk-${{ matrix.rid }}
+          path: out/QuickInk.exe

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>受け口の速度測定</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1b1e23; --muted:#68707c; --line:#e1e4e8; --accent:#4f46e5; --bad:#c62828; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --card:#1a1d23; --text:#e6e8eb; --muted:#9aa2ad; --line:#2c313a; --accent:#8b93f8; --bad:#ef6b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text);
+    font:15px/1.6 -apple-system, "Hiragino Sans", "Yu Gothic UI", "Segoe UI", sans-serif; }
+  main { max-width:560px; margin:0 auto; }
+  h1 { font-size:20px; margin:4px 0 8px; }
+  p { color:var(--muted); margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:0 0 4px; }
+  input, select { width:100%; font:inherit; padding:10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--bg); color:var(--text); margin-bottom:12px; }
+  button { width:100%; font:inherit; font-weight:700; padding:12px; border:0; border-radius:8px;
+    background:var(--accent); color:#fff; }
+  button:disabled { opacity:.5; }
+  .stats { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; }
+  .stat { border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+  .stat b { display:block; font-size:22px; font-variant-numeric:tabular-nums; }
+  .stat span { font-size:12px; color:var(--muted); }
+  ol { margin:8px 0 0; padding-left:24px; font-variant-numeric:tabular-nums; }
+  .bad { color:var(--bad); }
+</style>
+</head>
+<body>
+<main>
+  <h1>受け口の速度測定</h1>
+  <p>受け口に測定用の合図を送り、返事が来るまでの時間を測ります。メモのシートには何も書き込みません（「ログ」シートに OK-PING と記録されます）。</p>
+
+  <div class="card">
+    <label for="url">受け口のURL</label>
+    <input id="url" type="url" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+    <label for="token">合言葉（この端末の中だけに保存されます）</label>
+    <input id="token" type="password" autocomplete="off">
+    <label for="count">回数</label>
+    <select id="count"><option>10</option><option selected>20</option><option>30</option></select>
+    <button id="start" type="button">測定開始</button>
+  </div>
+
+  <div class="card" id="result" hidden>
+    <div class="stats">
+      <div class="stat"><b id="median">–</b><span>中央値（秒）</span></div>
+      <div class="stat"><b id="worst">–</b><span>最悪（秒）</span></div>
+      <div class="stat"><b id="first">–</b><span>1回目（しばらく使っていない状態）</span></div>
+      <div class="stat"><b id="best">–</b><span>最速（秒）</span></div>
+    </div>
+    <p id="note" style="margin:12px 0 0"></p>
+    <ol id="list"></ol>
+  </div>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  };
+  $('url').value = store.get('inbox-url');
+  $('token').value = store.get('inbox-token');
+
+  const sec = ms => (ms / 1000).toFixed(2);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // text/plain で送ると、ブラウザの事前確認（プリフライト）が入らず、ショートカットと同じ条件に近くなる
+  async function ping(url, token, readable) {
+    const body = JSON.stringify({ token, type: 'ping' });
+    const t0 = performance.now();
+    const res = await fetch(url, readable
+      ? { method: 'POST', body, headers: { 'Content-Type': 'text/plain;charset=utf-8' } }
+      : { method: 'POST', body, mode: 'no-cors' });
+    const reply = readable ? (await res.text()).trim() : '';
+    return { ms: performance.now() - t0, reply };
+  }
+
+  $('start').addEventListener('click', async () => {
+    const url = $('url').value.trim(), token = $('token').value.trim();
+    if (!url.startsWith('https://') || !token) { $('note').textContent = 'URLと合言葉を入れてください'; $('result').hidden = false; return; }
+    store.set('inbox-url', url); store.set('inbox-token', token);
+    const n = Number($('count').value);
+    $('start').disabled = true; $('result').hidden = false; $('list').innerHTML = ''; $('note').textContent = '測定中…';
+    let readable = true;
+    const times = [];
+    for (let i = 0; i < n; i++) {
+      const li = document.createElement('li');
+      try {
+        let r;
+        try { r = await ping(url, token, readable); }
+        catch (e) {
+          if (!readable) throw e;
+          readable = false;  // 返事の中身を読めない環境。時間だけ測る
+          r = await ping(url, token, false);
+        }
+        times.push(r.ms);
+        li.textContent = sec(r.ms) + ' 秒' + (r.reply && r.reply !== 'OK-PING' ? '　返事: ' + r.reply : '');
+        if (r.reply && r.reply !== 'OK-PING') li.className = 'bad';
+      } catch (e) {
+        li.textContent = '失敗（' + e.message + '）'; li.className = 'bad';
+      }
+      $('list').appendChild(li);
+      await sleep(500);
+    }
+    if (times.length) {
+      const sorted = times.slice().sort((a, b) => a - b);
+      $('median').textContent = sec(sorted[Math.floor((sorted.length - 1) / 2)]);
+      $('worst').textContent = sec(sorted[sorted.length - 1]);
+      $('best').textContent = sec(sorted[0]);
+      $('first').textContent = sec(times[0]);
+    }
+    const msgs = [];
+    if (!readable) msgs.push('この環境では返事の中身を読めないため、時間だけを測りました。');
+    if ([...$('list').children].some(li => li.textContent.includes('NG'))) msgs.push('「NG」は合言葉の間違いです。');
+    $('note').textContent = msgs.join(' ') || '完了。結果の画面をスクリーンショットで残しておいてください。';
+    $('start').disabled = false;
+  });
+</script>
+</body>
+</html>
