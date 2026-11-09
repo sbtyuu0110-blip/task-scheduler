@@ -74,7 +74,11 @@ function handle(e, log) {
   const isInk = data.type === 'ink';
   const text = String(data.text || '').trim();
   if (text.length > MAX_TEXT_LENGTH) return 'TOOBIG';
-  if (!isInk && !text) return 'OK-EMPTY';
+  if (!isInk && !text) {
+    // 本文の項目名が違う（古いショートカットなど）と気づけるように、届いた項目名を残す
+    log.note = '本文が空。届いた項目: ' + Object.keys(data).filter(function (k) { return k !== 'token'; }).join(', ');
+    return 'OK-EMPTY';
+  }
 
   let imageBytes = null;
   if (isInk) {
@@ -206,10 +210,19 @@ function writeLog(log, elapsedMs) {
 
 /* ===== ここから下は、エディタから手で実行する関数 ===== */
 
-// 初回に1回実行する。見出しの追加・書式の設定・ログシート作成・端末ごとの合言葉の発行を行う。
-// 何度実行しても、既にある合言葉は作り直さない。
+// 初回に1回実行する。見出しの追加・書式の設定・以前のメモへのID付け・ログシート作成・端末ごとの合言葉の発行を行う。
+// 何度実行しても、既にある合言葉とメモIDは作り直さない。
 function setup() {
-  prepareSheet(getSheet());
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sheet = getSheet();
+    prepareSheet(sheet);
+    const filled = fillMissingIds(sheet);
+    if (filled) console.log('以前のメモ ' + filled + ' 行にメモIDを付けました');
+  } finally {
+    lock.releaseLock();
+  }
   getLogSheet();
   const props = PropertiesService.getScriptProperties();
   ['iPhone', 'Surface'].forEach(function (device) {
@@ -217,6 +230,23 @@ function setup() {
     if (!props.getProperty(key)) props.setProperty(key, newToken());
   });
   listTokens();
+}
+
+// 以前の受け口で入った行にはメモIDがなく、AI振り分けの対象にならない。本文があってIDが空の行にだけIDを付ける
+function fillMissingIds(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return 0;
+  const texts = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  const idRange = sheet.getRange(2, COL_ID, lastRow - 1, 1);
+  const ids = idRange.getValues();
+  let count = 0;
+  ids.forEach(function (row, i) {
+    if (String(row[0]).trim() || !String(texts[i][0]).trim()) return;
+    row[0] = 'OLD-' + (i + 2) + '-' + Utilities.getUuid().slice(0, 8);
+    count++;
+  });
+  if (count) idRange.setValues(ids);
+  return count;
 }
 
 // 登録済みの合言葉を実行ログに表示する

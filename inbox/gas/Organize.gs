@@ -21,10 +21,14 @@ const COMPARE_SHEET_NAME = 'モデル比較';
 const DEFAULT_MODEL = 'claude-opus-5-5';
 const COMPARE_MODELS = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'];
 // 100万トークンあたりのドル（入力, 出力）。概算費用の表示にだけ使う
+// 下の3つは、AIが処理を断ったときに自動でやり直す先のモデル（返事の model に入る）
 const PRICES = {
   'claude-opus-5-5': [4, 20],
   'claude-sonnet-5-5': [2, 10],
   'claude-haiku-5-5': [0.10, 0.50],
+  'claude-opus-5': [5, 25],
+  'claude-opus-4-8': [5, 25],
+  'claude-sonnet-5': [2, 10],
 };
 const YEN_PER_DOLLAR = 150;
 const BATCH_SIZE = 8;                    // 1回の問い合わせを約60秒の制限内に収めるため
@@ -123,38 +127,84 @@ function disableAutoOrganize() {
 /* ===== 整理の本体 ===== */
 
 function organizeInbox() {
-  const lock = LockService.getScriptLock();
+  // 受け口（Code.gs の doPost）が使うスクリプトロックとは別のロックを使う。
+  // 同じロックだと、整理に数分かかる間、届いたメモが10秒待たされて ERROR になってしまう。
+  // 受け口は行を末尾に足すだけで、整理は既存の行を書き換えるだけなので、同時に動いてもぶつからない。
+  const lock = LockService.getDocumentLock() || LockService.getUserLock();
   if (!lock.tryLock(1000)) return;  // 別の整理が動いている
-  const started = Date.now();
-  let done = 0;
+  const state = { started: Date.now(), done: 0, stopped: false };
   try {
     const sheet = getSheet();
     const model = aiModel();
     const pending = readMemos(sheet).filter(function (m) { return m.status === '未整理'; });
     if (pending.length === 0) return;  // 未整理が0件ならAIを呼ばない（費用ゼロ）
 
-    for (let i = 0; i < pending.length; i += BATCH_SIZE) {
-      if (Date.now() - started > TIME_BUDGET_MS) break;  // 残りは次回
-      const batch = pending.slice(i, i + BATCH_SIZE);
-      let res;
-      try {
-        res = callClaude(model, batch);
-      } catch (err) {
-        writeAiLog(model, batch.length, null, 'エラー（次回に再試行）: ' + String(err.message || err).slice(0, 300));
-        break;
-      }
-      if (res.refusal) {
-        batch.forEach(function (m) { markNeedsReview(sheet, m, 'AIがこのメモの処理を断りました'); });
-        writeAiLog(model, batch.length, res.usage, 'AIが処理を断ったため「要確認」にしました');
-        continue;
-      }
-      done += applyResults(sheet, batch, res.memos);
-      writeAiLog(res.model, batch.length, res.usage, '');
+    for (let i = 0; i < pending.length && !state.stopped; i += BATCH_SIZE) {
+      if (outOfTime(state)) break;  // 残りは次回
+      organizeBatch(sheet, model, pending.slice(i, i + BATCH_SIZE), state);
     }
   } finally {
     lock.releaseLock();
   }
-  notify(done + '件を整理しました');
+  notify(state.done + '件を整理しました');
+}
+
+function outOfTime(state) {
+  return Date.now() - state.started > TIME_BUDGET_MS;
+}
+
+// 失敗したときは原因によって「今回はやめて次回に再試行」か「半分に分けてやり直す」。
+// 1件だけでも失敗するメモは「要確認」にして、そのメモのせいでほかのメモの整理が止まり続けないようにする。
+function organizeBatch(sheet, model, batch, state) {
+  if (state.stopped || outOfTime(state)) return;
+  let res;
+  try {
+    res = callClaude(model, batch);
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    const kind = errorKind(msg);
+    if (kind === 'stop' || (kind === 'split' && batch.length === 1)) {
+      writeAiLog(model, batch.length, null, 'エラー（次回に再試行）: ' + msg.slice(0, 300));
+      state.stopped = true;
+      return;
+    }
+    if (batch.length === 1) {
+      markNeedsReview(sheet, batch[0], 'AIで処理できませんでした（' + msg.slice(0, 120) + '）');
+      writeAiLog(model, 1, null, '1件を「要確認」にしました: ' + msg.slice(0, 300));
+      return;
+    }
+    writeAiLog(model, batch.length, null, '分けてやり直します: ' + msg.slice(0, 300));
+    splitAndRetry(sheet, model, batch, state);
+    return;
+  }
+  if (res.refusal) {
+    writeAiLog(res.model, batch.length, res.usage, 'AIが処理を断りました' + (batch.length > 1 ? '（分けてやり直します）' : '（「要確認」にしました）'));
+    if (batch.length > 1) {
+      splitAndRetry(sheet, model, batch, state);  // 断られる原因のメモだけを「要確認」にするため
+    } else {
+      markNeedsReview(sheet, batch[0], 'AIがこのメモの処理を断りました');
+    }
+    return;
+  }
+  state.done += applyResults(sheet, batch, res.memos);
+  writeAiLog(res.model, batch.length, res.usage, '');
+}
+
+function splitAndRetry(sheet, model, batch, state) {
+  const half = Math.ceil(batch.length / 2);
+  organizeBatch(sheet, model, batch.slice(0, half), state);
+  organizeBatch(sheet, model, batch.slice(half), state);
+}
+
+// stop  : APIキー・残高・混雑など、メモの中身と関係ない問題。今回はやめて次回に再試行する
+// memo  : 特定のメモが原因かもしれない問題。分けて試し、1件でも失敗するメモは「要確認」にする
+// split : 時間切れや通信の問題。小さく分けて試し、1件でも失敗するなら次回に再試行する
+function errorKind(msg) {
+  if (/ANTHROPIC_API_KEY/.test(msg) || /^HTTP (401|403|404|429|5\d\d)/.test(msg) || /credit|balance|billing/i.test(msg)) {
+    return 'stop';
+  }
+  if (/^HTTP (400|413)/.test(msg) || /^画像を開けません|途切れ|本文がありません|JSON/.test(msg)) return 'memo';
+  return 'split';
 }
 
 function readMemos(sheet) {
@@ -187,7 +237,12 @@ function callClaude(model, memos) {
       : String(m.createdAt);
     if (m.imageFileId) {
       content.push({ type: 'text', text: 'メモID: ' + m.id + '\n入力日時: ' + when + '\n種類: 手書き（次の画像）' });
-      const bytes = DriveApp.getFileById(m.imageFileId).getBlob().getBytes();
+      let bytes;
+      try {
+        bytes = DriveApp.getFileById(m.imageFileId).getBlob().getBytes();
+      } catch (err) {
+        throw new Error('画像を開けません（削除された可能性。メモID ' + m.id + '）: ' + ((err && err.message) || err));
+      }
       content.push({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: Utilities.base64Encode(bytes) } });
     } else {
       content.push({ type: 'text', text: 'メモID: ' + m.id + '\n入力日時: ' + when + '\n本文:\n' + m.text });

@@ -235,6 +235,8 @@ public sealed class Tray : IDisposable
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Log.Folder}\"") { UseShellExecute = true }));
         menu.Items.Add("送信待ちフォルダを開く", null, (_, _) =>
             Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Outbox.PendingDir}\"") { UseShellExecute = true }));
+        menu.Items.Add("送れなかったフォルダを開く", null, (_, _) =>
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{Outbox.FailedDir}\"") { UseShellExecute = true }));
         menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         menu.Items.Add("終了", null, (_, _) => core.Exit());
 

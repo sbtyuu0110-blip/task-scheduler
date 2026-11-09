@@ -14,6 +14,7 @@ namespace QuickInk;
 
 // 「送信待ち」フォルダ。1メモ＝ メモID.json（送る内容の情報）＋ メモID.png（書いた部分の画像）＋ メモID.isf（筆跡の元データ）。
 // 受け口が「OK」で始まる返事をしたら「送信済み」へ移し、30日後に消す。届くまで何度でも送り直す。
+// 何度送っても受け付けられないもの（BADREQ・TOOBIG・ファイルの欠け）は「送れなかった」へ移し、後ろのメモを先に送る。
 public sealed class Outbox
 {
     const double MaxImageEdge = 1600;
@@ -25,6 +26,7 @@ public sealed class Outbox
 
     public static string PendingDir => Paths.Sub("送信待ち");
     public static string SentDir => Paths.Sub("送信済み");
+    public static string FailedDir => Paths.Sub("送れなかった");
 
     public int PendingCount() => Directory.GetFiles(PendingDir, "*.json").Length;
 
@@ -118,7 +120,21 @@ public sealed class Outbox
             long started = System.Diagnostics.Stopwatch.GetTimestamp();
             try
             {
-                var meta = JsonNode.Parse(File.ReadAllText(metaPath))!.AsObject();
+                string pngPath = Path.Combine(PendingDir, id + ".png");
+                JsonObject? meta = null;
+                try
+                {
+                    meta = JsonNode.Parse(File.ReadAllText(metaPath))?.AsObject();
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    // 下で「送れなかった」へ移す
+                }
+                if (meta == null || !File.Exists(pngPath))
+                {
+                    GiveUp(id, meta == null ? "情報ファイルが壊れています" : "画像ファイルがありません");
+                    continue;
+                }
                 var payload = new JsonObject
                 {
                     ["token"] = config.Token,
@@ -126,16 +142,25 @@ public sealed class Outbox
                     ["createdAt"] = (string?)meta["createdAt"],
                     ["type"] = "ink",
                     ["text"] = "",
-                    ["image"] = Convert.ToBase64String(File.ReadAllBytes(Path.Combine(PendingDir, id + ".png"))),
+                    ["image"] = Convert.ToBase64String(File.ReadAllBytes(pngPath)),
                 };
                 using var content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
                 using HttpResponseMessage response = http.PostAsync(config.Url, content).GetAwaiter().GetResult();
                 string reply = response.Content.ReadAsStringAsync().GetAwaiter().GetResult().Trim();
                 double ms = System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                 Log.Send(id, reply.Length > 40 ? reply[..40] : reply, ms);
-                if (!reply.StartsWith("OK", StringComparison.Ordinal)) return false;  // 合言葉違いなどは、設定が直るまで残しておく
-                MoveToSent(id);
-                PendingChanged?.Invoke(PendingCount());
+                if (reply.StartsWith("OK", StringComparison.Ordinal))
+                {
+                    MoveAll(id, SentDir);
+                    PendingChanged?.Invoke(PendingCount());
+                    continue;
+                }
+                if (reply == "BADREQ" || reply == "TOOBIG")
+                {
+                    GiveUp(id, "受け口が受け付けませんでした（" + reply + "）");
+                    continue;
+                }
+                return false;  // 合言葉違い（NG）や受け口の不調（ERROR など）は、直るまで残しておく
             }
             catch (Exception ex)
             {
@@ -146,13 +171,21 @@ public sealed class Outbox
         return true;
     }
 
-    static void MoveToSent(string id)
+    static void MoveAll(string id, string toDir)
     {
         foreach (string ext in new[] { ".png", ".isf", ".json" })
         {
             string from = Path.Combine(PendingDir, id + ext);
-            if (File.Exists(from)) File.Move(from, Path.Combine(SentDir, id + ext), overwrite: true);
+            if (File.Exists(from)) File.Move(from, Path.Combine(toDir, id + ext), overwrite: true);
         }
+    }
+
+    // 書いた内容は消さずに「送れなかった」に残す（筆跡の元データ .isf も一緒に移す）
+    void GiveUp(string id, string reason)
+    {
+        MoveAll(id, FailedDir);
+        Log.Diag($"{id} を「送れなかった」に移しました: {reason}");
+        PendingChanged?.Invoke(PendingCount());
     }
 
     static void DeleteOldSent()
