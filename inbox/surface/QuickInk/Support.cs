@@ -106,8 +106,10 @@ public static class Log
 public static class Diagnostics
 {
     public static string Summary() =>
+        $"版={typeof(Diagnostics).Assembly.GetName().Version?.ToString(3)}, " +
         $"アプリの種類={RuntimeInformation.ProcessArchitecture}（ARM64ならSnapdragon向けに直接動作）, " +
         $"OS={RuntimeInformation.OSArchitecture} {Environment.OSVersion.Version}, " +
+        $"アニメーション効果={(System.Windows.SystemParameters.ClientAreaAnimation ? "オン" : "オフ")}, " +
         $"場所={Environment.ProcessPath}";
 }
 
@@ -212,6 +214,8 @@ public sealed class Triggers
 public sealed class Tray : IDisposable
 {
     readonly System.Windows.Forms.NotifyIcon icon;
+    int pending;
+    bool alert;
 
     public Tray(AppCore core, Outbox outbox)
     {
@@ -250,14 +254,45 @@ public sealed class Tray : IDisposable
         icon.DoubleClick += (_, _) => core.RequestShow("右下のアイコン");
         // 送信は裏のスレッドで動くので、アイコンの表示更新は画面のスレッドに戻してから行う
         var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
-        outbox.PendingChanged += count => dispatcher.BeginInvoke(() => UpdateText(count));
-        UpdateText(outbox.PendingCount());
+        outbox.PendingChanged += count => dispatcher.BeginInvoke(() =>
+        {
+            pending = count;
+            if (count == 0) SetAlert(false);
+            UpdateText();
+        });
+        pending = outbox.PendingCount();
+        UpdateText();
     }
 
-    void UpdateText(int pending)
+    // 届かないメモが残っている間は、アイコンを警告の形にする
+    public void SetAlert(bool on)
+    {
+        if (alert == on) return;
+        alert = on;
+        icon.Icon = on ? System.Drawing.SystemIcons.Warning : System.Drawing.SystemIcons.Application;
+        UpdateText();
+    }
+
+    // Windows の通知。見逃しても通知センターに残る
+    public void Balloon(string message)
+    {
+        try
+        {
+            icon.ShowBalloonTip(8000, "QuickInk", message, System.Windows.Forms.ToolTipIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            Log.Diag("通知を出せません: " + ex.Message);
+        }
+    }
+
+    void UpdateText()
     {
         string configured = Config.Load() == null ? "（未設定）" : "";
-        icon.Text = pending > 0 ? $"QuickInk 未送信 {pending}件{configured}" : $"QuickInk{configured}";
+        string text = pending > 0
+            ? $"QuickInk 未送信 {pending}件{(alert ? "（まだ届いていません）" : "")}{configured}"
+            : $"QuickInk{configured}";
+        icon.Text = text.Length > 120 ? text[..120] : text;
     }
 
     public void Dispose()

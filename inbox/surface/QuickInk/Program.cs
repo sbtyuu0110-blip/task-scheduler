@@ -55,7 +55,9 @@ public sealed class AppCore
     readonly Application app;
     Outbox outbox = null!;
     InkWindow window = null!;
+    Toast toast = null!;
     Tray tray = null!;
+    Feedback feedback = null!;
     Triggers triggers = null!;
 
     public AppCore(Application app) => this.app = app;
@@ -64,9 +66,12 @@ public sealed class AppCore
     {
         Log.Diag("起動: " + Diagnostics.Summary());
         outbox = new Outbox();
+        toast = new Toast();
+        toast.Prepare();
         window = new InkWindow(outbox);
         window.Prepare();
         tray = new Tray(this, outbox);
+        feedback = new Feedback(window, toast, tray, outbox);
         triggers = new Triggers(window, RequestShow);
         triggers.Start();
         StartPipeServer();
@@ -78,7 +83,11 @@ public sealed class AppCore
     public void RequestShow(string source)
     {
         long receivedAt = Stopwatch.GetTimestamp();
-        window.Dispatcher.BeginInvoke(() => window.ShowForInk(source, receivedAt));
+        window.Dispatcher.BeginInvoke(() =>
+        {
+            window.ShowForInk(source, receivedAt);
+            toast.HideNow();  // 新しい白紙の上に札を残さない（送った結果は白紙の右上に出る）
+        });
     }
 
     public void Exit()

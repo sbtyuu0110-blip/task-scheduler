@@ -12,6 +12,18 @@ using System.Windows.Media.Imaging;
 
 namespace QuickInk;
 
+// 1回の送信の結果。画面側（Feedback）が「届きました」や「まだ届いていません」を出すのに使う
+public enum SendResult
+{
+    Delivered,      // 受け口に届いた（OK）
+    Retrying,       // 通信できない・受け口の不調。控えを残して、あとで自動で送り直す
+    WrongToken,     // 合言葉が違う（NG）。設定を直すまで届かない
+    Rejected,       // 受け口が受け付けない（BADREQ・TOOBIG・ファイルの欠け）。「送れなかった」へ移した
+    NotConfigured,  // 送り先が設定されていない
+}
+
+public readonly record struct SendOutcome(SendResult Result, string Detail, int Pending);
+
 // 「送信待ち」フォルダ。1メモ＝ メモID.json（送る内容の情報）＋ メモID.png（書いた部分の画像）＋ メモID.isf（筆跡の元データ）。
 // 受け口が「OK」で始まる返事をしたら「送信済み」へ移し、30日後に消す。届くまで何度でも送り直す。
 // 何度送っても受け付けられないもの（BADREQ・TOOBIG・ファイルの欠け）は「送れなかった」へ移し、後ろのメモを先に送る。
@@ -23,6 +35,8 @@ public sealed class Outbox
 
     readonly AutoResetEvent wake = new(false);
     public event Action<int>? PendingChanged;
+    // 送信のスレッドから呼ばれる。画面を触るときは画面のスレッドに戻すこと
+    public event Action<SendOutcome>? Outcome;
 
     public static string PendingDir => Paths.Sub("送信待ち");
     public static string SentDir => Paths.Sub("送信済み");
@@ -112,7 +126,13 @@ public sealed class Outbox
     bool SendAll(HttpClient http)
     {
         Config? config = Config.Load();
-        if (config == null) return true;  // 未設定。設定されるまで送らずに貯めておく
+        if (config == null)
+        {
+            // 未設定。設定されるまで送らずに貯めておく（貯まっているときは画面で知らせる）
+            int waiting = PendingCount();
+            if (waiting > 0) Report(SendResult.NotConfigured, "", waiting);
+            return true;
+        }
 
         foreach (string metaPath in Directory.GetFiles(PendingDir, "*.json").OrderBy(p => p, StringComparer.Ordinal))
         {
@@ -152,7 +172,9 @@ public sealed class Outbox
                 if (reply.StartsWith("OK", StringComparison.Ordinal))
                 {
                     MoveAll(id, SentDir);
-                    PendingChanged?.Invoke(PendingCount());
+                    int left = PendingCount();
+                    PendingChanged?.Invoke(left);
+                    Report(SendResult.Delivered, id, left);
                     continue;
                 }
                 if (reply == "BADREQ" || reply == "TOOBIG")
@@ -160,11 +182,14 @@ public sealed class Outbox
                     GiveUp(id, "受け口が受け付けませんでした（" + reply + "）");
                     continue;
                 }
-                return false;  // 合言葉違い（NG）や受け口の不調（ERROR など）は、直るまで残しておく
+                // 合言葉違い（NG）や受け口の不調（ERROR など）は、直るまで残しておく
+                Report(reply == "NG" ? SendResult.WrongToken : SendResult.Retrying, reply.Length > 40 ? reply[..40] : reply, PendingCount());
+                return false;
             }
             catch (Exception ex)
             {
                 Log.Send(id, "通信エラー: " + ex.GetType().Name, System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                Report(SendResult.Retrying, ex.GetType().Name, PendingCount());
                 return false;
             }
         }
@@ -185,7 +210,21 @@ public sealed class Outbox
     {
         MoveAll(id, FailedDir);
         Log.Diag($"{id} を「送れなかった」に移しました: {reason}");
-        PendingChanged?.Invoke(PendingCount());
+        int left = PendingCount();
+        PendingChanged?.Invoke(left);
+        Report(SendResult.Rejected, reason, left);
+    }
+
+    void Report(SendResult result, string detail, int pending)
+    {
+        try
+        {
+            Outcome?.Invoke(new SendOutcome(result, detail, pending));
+        }
+        catch (Exception ex)
+        {
+            Log.Diag("送信結果の表示に失敗: " + ex.Message);
+        }
     }
 
     static void DeleteOldSent()
